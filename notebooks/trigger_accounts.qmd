@@ -1,0 +1,36 @@
+---
+title: "trigger_accounts"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(reticulate)
+
+# Use venv Python ~/.venv/pytrigger
+use_python("~/.venv/pytrigger/bin/python", required = TRUE)
+```
+
+```{python}
+import pandas as pd
+from trigger import TriggerDB
+
+with TriggerDB() as db:
+    accounts = (
+        db.from_("accounts")
+          .select("email", "id", "created_at", "last_login")
+          .where(id=">=0")       
+          .order_by("id")        
+          .asc()
+          .limit(10000)
+          .fetch()
+    )
+
+accounts = pd.json_normalize(accounts)
+```
+
+```{r}
+accounts <- reticulate::py$accounts
+```
+
