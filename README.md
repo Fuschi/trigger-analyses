@@ -18,7 +18,7 @@ python3 -m venv ~/.venv/pytrigger
 source ~/.venv/pytrigger/bin/activate
 
 # Clone the Trigger client (replace with your organization if needed)
-git clone https://github.com/<YOUR_ORG>/trigger.git
+git clone git@github.com:Nico-Curti/pytrigger.git
 cd trigger
 
 # Install Trigger and additional dependencies
