@@ -60,7 +60,7 @@ with TriggerDB() as db:
       .where(year='=2025', month='=9', day='=10', hour='>=0', email='=DE000086')
       .order_by('second')
       .asc()
-      .limit(10000)
+      .limit(10)
       .fetch()
   )
 
@@ -71,8 +71,6 @@ df
 ```{python}
 import pandas as pd
 from trigger import TriggerDB
-
-email_target = "DE000086"
 
 email_target = "DE000086"
 
@@ -100,4 +98,3 @@ as_tibble(py$df_days_raw) %>%
 with TriggerDB() as db:
   db.accounts()
 ```
-
