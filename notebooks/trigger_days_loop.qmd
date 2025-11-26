@@ -142,5 +142,20 @@ else:
 
 ```
 
+```{python}
+import sys
+sys.path.append("..") 
+from python.trigger_utils import collect_timeseries, get_active_emails
+import datetime as dt
 
+test = collect_timeseries(
+    table_name = 'myair',
+    start_date = dt.date(2025, 10, 1),
+    end_date = dt.date(2025, 10, 5),
+    emails=get_active_emails(limit=200)[0:2],
+    select_columns=None,
+    max_rows_per_query=9000,
+    delay_ms=50,
+    active_email_limit=200)
+```
 
