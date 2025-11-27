@@ -158,4 +158,3 @@ test = collect_timeseries(
     delay_ms=50,
     active_email_limit=200)
 ```
-
