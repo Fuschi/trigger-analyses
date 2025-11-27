@@ -15,6 +15,22 @@ use_python("~/.venv/pytrigger/bin/python", required = TRUE)
 ```
 
 ```{python}
+import sys
+sys.path.append("..")  # make 'python/' package visible
+
+import time
+import datetime as dt
+import pandas as pd
+from trigger import TriggerDB
+from tqdm.auto import tqdm
+
+from python.trigger_utils import get_active_emails, silent_logger
+
+EMAILS = get_active_emails(limit=200)
+```
+
+
+```{python}
 #| echo: false
 #| message: false
 #| warning: false

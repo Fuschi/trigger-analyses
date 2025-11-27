@@ -13,6 +13,7 @@ source("../R/trigger_utils.R")
 
 ```{r}
 # Connect to MariaDB/MySQL
+tunnel <- start_ssh_tunnel()
 con <- connect_trigger_db()
 ```
 
@@ -32,6 +33,13 @@ df
 DBI::dbDisconnect(con)
 ```
 
+```{r}
+# Connect to MariaDB/MySQL
+con <- connect_trigger_db()
+on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-
-
+# Minimal example query
+query <- "SELECT * FROM myair LIMIT 10;"
+df <- DBI::dbGetQuery(con, query)
+df
+```

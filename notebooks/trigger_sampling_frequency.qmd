@@ -1,0 +1,112 @@
+---
+title: "trigger_sampling_frequency"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(ggnewscale)
+
+library(processx)
+library(DBI)
+library(RMariaDB)
+
+triggerR <- new.env()
+sys.source("../R/trigger_utils.R", envir = triggerR)
+```
+
+```{r}
+# Connect to MariaDB/MySQL
+tunnel <- triggerR$start_ssh_tunnel()
+con <- triggerR$connect_trigger_db()
+```
+
+```{r}
+DBI::dbListTables(con)
+```
+
+```{r}
+accounts <- triggerR$get_active_members(con)
+```
+
+```{r}
+wanted_tbl <- c("myair", "ecg", "ppg", "sleep", "smartwatchlow", "smartwatchhigh")
+```
+
+```{r}
+query_occ_tbl <- function(con, tbl, limit = 9000) {
+  
+  # small validation
+  if (!inherits(con, "DBIConnection"))
+    cli::cli_abort("{.arg con} must be a valid DBI connection.")
+  
+  if (!is.character(tbl) || length(tbl) != 1)
+    cli::cli_abort("{.arg tbl} must be a single character string (table name).")
+  
+  sql <- sprintf("
+    SELECT
+        m.deviceId,
+        u.userId,
+        STR_TO_DATE(CONCAT(m.year, '-', m.month, '-', m.day), '%%Y-%%m-%%d') AS date,
+        COUNT(*) AS n
+    FROM %s AS m
+    LEFT JOIN user_%s AS u
+        ON m.deviceId = u.deviceId
+    GROUP BY m.deviceId, u.userId, date
+    ORDER BY m.deviceId, date
+    LIMIT %d;
+  ", tbl, tbl, limit)
+  
+  occ_tbl <- DBI::dbGetQuery(con, sql)
+  
+  return(occ_tbl)
+}
+```
+
+```{r}
+tbl_occ <- sapply(wanted_tbl, \(x){
+  query_occ_tbl(con = con, tbl = x, limit = 9000)
+}, simplify = F, USE.NAMES = T)
+```
+
+```{r, fig.width=12, fig.asp=.618}
+p_occ <- purrr::list_rbind(tbl_occ, names_to = "tbl") %>%
+  filter(!is.na(userId)) %>%
+  filter(lubridate::year(date) >= 2023) %>%
+  left_join(accounts, join_by(userId == id)) %>%
+  arrange(country, userId, date) %>%
+  mutate(userId = factor(userId, levels = unique(userId))) %>%
+  mutate(country_x = min(date) -1) %>%
+  ggplot(aes(x = date, y = userId, fill = n)) +
+  geom_tile() +
+  theme_minimal() +
+  scale_fill_viridis_c(option = "C", trans = "log10",
+                       label = scales::label_scientific(),
+                       name   = "n (log10)") +
+  theme(legend.position = "bottom",
+        axis.text.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  ggnewscale::new_scale_fill() +
+  geom_tile(
+    aes(x = country_x, fill = country),
+    width = 10,
+    show.legend = TRUE
+  ) +
+  scale_x_date(expand = expansion(mult = c(0, 0))) +
+  facet_wrap(~tbl) +
+  theme(
+  panel.grid.major.y = element_line(linewidth = 0.2),
+  panel.grid.minor.y = element_line(linewidth = 0.2)
+)
+p_occ
+```
+
+```{r}
+png(filename = "~/Scrivania/trigger-analyses/cache/plot_time_occurences.png",
+    width = 12*300, height = 12*.618*300, res = 300)
+p_occ
+dev.off()
+```
+
