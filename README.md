@@ -76,8 +76,7 @@ on.exit(DBI::dbDisconnect(con), add = TRUE)
 query <- "SELECT * FROM myair LIMIT 10;"
 df <- DBI::dbGetQuery(con, query)
 df
-
----
+```
 
 ## 📁 Project Structure
 
