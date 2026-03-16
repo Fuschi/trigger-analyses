@@ -1,0 +1,100 @@
+---
+title: "trigger_exploration"
+format: html
+editor: visual
+---
+
+```{r}
+library(reticulate)
+
+# Use venv Python ~/.venv/pytrigger
+use_python("~/.venv/pytrigger/bin/python", required = TRUE)
+
+py_config()  # check
+```
+
+```{python}
+from trigger import TriggerDB
+
+with TriggerDB() as db:
+        print("Connection OK:", db)
+```
+
+```{python}
+with TriggerDB() as db:
+  print(db.accounts())
+```
+
+```{python}
+import pandas as pd
+
+with TriggerDB() as db:
+  df = pd.json_normalize(db.accounts())
+
+df
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+as_tibble(reticulate::py$df)
+```
+
+```{python}
+with TriggerDB() as db:
+  tables = db.tables()
+  print(f'Available tables: {tables}')
+  for tab in tables:
+    print(f'  {tab}: {db.columns(tab)}')
+```
+
+```{python}
+with TriggerDB() as db:
+  print(dir(db))
+```
+
+```{python}
+with TriggerDB() as db:
+  res = (
+    db.from_('myair')
+      .select('email', 'year', 'month', 'day', 'hour', 'minute', 'second', 'temperature', 'humidity', 'pressure')
+      .where(year='=2025', month='=9', day='=10', hour='>=0', email='=DE000086')
+      .order_by('second')
+      .asc()
+      .limit(10)
+      .fetch()
+  )
+
+df = pd.json_normalize(res)
+df
+```
+
+```{python}
+import pandas as pd
+from trigger import TriggerDB
+
+email_target = "DE000086"
+
+with TriggerDB() as db:
+    res_days_raw = (
+        db.from_("myair")
+          .select('email', 'year', 'month', 'day')
+          .where(email=f"={email_target}")
+          .order_by('year')
+          .asc()
+          .limit(1000)
+          .fetch()
+    )
+    
+df_days_raw = pd.json_normalize(res_days_raw)
+```
+
+```{r}
+as_tibble(py$df_days_raw) %>%
+  group_by(month, day) %>%
+  summarise(n = n(), .groups = "drop")
+```
+
+```{python}
+with TriggerDB() as db:
+  db.accounts()
+```

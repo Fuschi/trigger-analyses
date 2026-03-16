@@ -1,0 +1,44 @@
+---
+title: "trigger_accounts"
+format: html
+editor: visual
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(reticulate)
+
+# Use venv Python ~/.venv/pytrigger
+use_python("~/.venv/pytrigger/bin/python", required = TRUE)
+```
+
+```{python}
+import pandas as pd
+from trigger import TriggerDB
+```
+
+```{python}
+with TriggerDB() as db:
+  accounts = db.from_('accounts').limit(200).fetch()
+accounts = pd.json_normalize(accounts)
+```
+
+```{r}
+accounts <- reticulate::py$accounts %>%
+  mutate(country = str_sub(email, end = 2)) %>%
+  filter(country %in% c("CH", "DE", "GR", "IT"))
+```
+
+```{r}
+accounts %>%
+  mutate(active_member = !is.na(last_login)) %>%
+  group_by(country, active_member) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  ggplot(aes(x = country, y = n, fill = active_member)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = n), position = position_dodge(width = .8), vjust = -.1) +
+  theme_bw()
+```
+

@@ -1,0 +1,207 @@
+#' Start an SSH tunnel to the MariaDB Trigger server (bio4)
+#'
+#' This function opens an SSH tunnel from the local machine to the
+#' **MariaDB Trigger** server running on `bio4`, allowing RStudio to
+#' access the remote database securely via a local TCP port.
+#'
+#' The tunnel forwards the local port `3336` to the remote
+#' MariaDB service on `127.0.0.1:3306` inside `bio4`.  
+#' Once the tunnel is active, the database can be reached from R using:
+#'
+#' \preformatted{
+#' host = "127.0.0.1"
+#' port = 3336
+#' }
+#'
+#' This method relies on the SSH configuration in `~/.ssh/config`, where
+#' the host `bio4` must already define the ProxyJump and authentication
+#' details required for the connection.
+#'
+#' The tunnel is launched in the background (`ssh -N -f`) using the
+#' `processx` package and remains active until manually terminated.
+#'
+#' @return A \code{processx::process} object representing the SSH tunnel.
+#'         You can stop the tunnel with:
+#'         \code{tunnel$kill()}.
+#'
+#' @examples
+#' \dontrun{
+#'   # Start SSH tunnel
+#'   tunnel <- start_ssh_tunnel()
+#'
+#'   # Connect to MariaDB using your custom helper function
+#'   con <- connect_trigger_db()
+#'
+#'   # Close tunnel when done
+#'   tunnel$kill()
+#' }
+#'
+#' @seealso \code{\link{connect_trigger_db}} for the database connection helper.
+#'
+#' @export
+start_ssh_tunnel <- function() {
+  if (!requireNamespace("processx", quietly = TRUE))
+    stop("Install 'processx' first.")
+  
+  tunnel <- processx::process$new(
+    "ssh",
+    c(
+      "-N",                   # no remote command
+      "-f",                   # run in background
+      "-L", "3336:127.0.0.1:3306",   # local port : remote MariaDB
+      "bio4"                  # uses ~/.ssh/config automatically
+    ),
+    supervise = TRUE
+  )
+  
+  message("SSH tunnel started on localhost:3336")
+  return(tunnel)
+}
+
+#' Connect to the triggerIO MariaDB database through SSH tunnel
+#'
+#' This function establishes a connection from RStudio (running on your local
+#' computer) to the MariaDB database hosted on the remote server `bio4`.
+#'
+#' ## SSH configuration required
+#'
+#' Your `~/.ssh/config` must contain entries for both the bastion host and the
+#' final server `bio4`, including the automatic port forwarding used by RStudio
+#' to access the database:
+#'
+#' \preformatted{
+#' Host bastion-bio
+#'     HostName 137.204.51.130
+#'     User alessandro.fuschi2
+#'
+#' Host bio4
+#'     HostName 137.204.51.134
+#'     User alessandro.fuschi2
+#'     ProxyJump bastion-bio
+#'     ServerAliveInterval 240
+#'     LocalForward 3336 127.0.0.1:3306
+#' }
+#'
+#' With this configuration, running the command:
+#' \preformatted{
+#' ssh bio4
+#' }
+#' will automatically:
+#' \itemize{
+#'   \item connect through the bastion host,
+#'   \item open a local port `3336` on *your* computer,
+#'   \item forward that port to MariaDB running on `bio4:3306`.
+#' }
+#'
+#' ## Requirements before calling this function
+#'
+#' \itemize{
+#'   \item You have an active SSH connection created with `ssh bio4`.
+#'   \item The SSH session must remain open while RStudio is running,
+#'         because it provides the database tunnel.
+#'   \item MariaDB is reachable at `127.0.0.1:3336` from your local machine.
+#' }
+#'
+#' ## Connection parameters
+#'
+#' These are directly set inside the function (no hidden envs):
+#' \itemize{
+#'   \item host = "127.0.0.1"
+#'   \item port = 3336
+#'   \item db   = "triggerIO"
+#'   \item user = "triggerIO"
+#'   \item pwd  = "triggerIO"
+#' }
+#'
+#' The function loads the required packages internally and returns an active
+#' \code{DBIConnection} object.
+#'
+#' @return A \code{DBIConnection} object pointing to the remote triggerIO
+#'         MariaDB instance.
+#'
+#' @examples
+#' \dontrun{
+#'   # Start SSH tunnel in a terminal:
+#'   #   ssh bio4
+#'
+#'   con <- connect_trigger_db()
+#'   DBI::dbListTables(con)
+#' }
+#'
+#' @export
+connect_trigger_db <- function() {
+  
+  # Load required packages without attaching them
+  if (!requireNamespace("DBI", quietly = TRUE))
+    stop("Package 'DBI' is not installed.")
+  if (!requireNamespace("RMariaDB", quietly = TRUE))
+    stop("Package 'RMariaDB' is not installed.")
+  
+  DBI::dbConnect(
+    RMariaDB::MariaDB(),
+    host     = "127.0.0.1",
+    port     = 3336L,
+    user     = "triggerIO",
+    password = "triggerIO",
+    dbname   = "triggerIO"
+  )
+}
+
+#' Get active members with country extracted from email
+#'
+#' Retrieves up to `limit` rows from the `accounts` table,
+#' keeps only active members (non-missing `last_login`),
+#' filters emails starting with CH, DE, GR, IT,
+#' and adds a `country` column extracted from the prefix.
+#'
+#' @param con A DBI connection.
+#' @param limit Maximum number of rows to retrieve (default: 1000).
+#'
+#' @return A tibble with `id`, `email`, `country` and `last_login`.
+get_active_members <- function(con, limit = 1000) {
+  
+  # ---- Validation ----------------------------------------------------------
+  
+  if (!requireNamespace("DBI", quietly = TRUE))
+    cli::cli_abort("Package {.pkg DBI} is required but not installed.")
+  
+  if (!requireNamespace("RMariaDB", quietly = TRUE))
+    cli::cli_abort("Package {.pkg RMariaDB} is required but not installed.")
+  
+  if (!requireNamespace("tidyverse", quietly = TRUE))
+    cli::cli_abort("Package {.pkg tidyverse} is required but not installed.")
+  
+  if (!inherits(con, "MariaDBConnection"))
+    cli::cli_abort("{.arg con} must be a valid DBI connection object.")
+  
+  if (!is.numeric(limit) || length(limit) != 1 || limit <= 0)
+    cli::cli_abort("{.arg limit} must be a positive numeric scalar.")
+  
+  # ---- Query ---------------------------------------------------------------
+  
+  query <- sprintf("
+    SELECT id, email, last_login
+    FROM accounts
+    LIMIT %d
+  ", limit)
+  
+  df <- tryCatch(
+    DBI::dbGetQuery(con, query),
+    error = function(e) {
+      cli::cli_abort(
+        "Database query failed when retrieving accounts.\n{.emph {e$message}}"
+      )
+    }
+  )
+  
+  # ---- Filtering  and Manipulation -----------------------------------------
+  
+  df <- df %>%
+    filter(!is.na(last_login)) %>%
+    filter(str_detect(email, "^(CH|DE|GR|IT)")) %>%
+    mutate(
+      country = stringr::str_extract(email, "^(CH|DE|GR|IT)")
+    )
+  
+  return(df)
+}
