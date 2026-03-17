@@ -1,0 +1,235 @@
+#' Trigger readers and procedures
+#'
+#' Utility functions to read hourly aggregated tables and call
+#' stored procedures, returning results as tibbles.
+#'
+#' @keywords internal
+NULL
+
+
+# ------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------
+
+#' Execute a stored procedure and return a tibble
+#'
+#' @param con A DBI connection.
+#' @param procedure Name of the stored procedure.
+#' @param params A character vector of SQL literals.
+#'
+#' @return A tibble.
+#' @keywords internal
+db_call_procedure <- function(con, procedure, params) {
+  sql <- paste0(
+    "CALL ",
+    procedure,
+    "(",
+    paste(params, collapse = ", "),
+    ")"
+  )
+  
+  res <- DBI::dbSendQuery(con, sql)
+  on.exit(DBI::dbClearResult(res), add = TRUE)
+  
+  tibble::as_tibble(DBI::dbFetch(res))
+}
+
+
+#' Read a full table and return a tibble
+#'
+#' @param con A DBI connection.
+#' @param table Name of the table.
+#'
+#' @return A tibble.
+#' @keywords internal
+db_read_table <- function(con, table) {
+  tibble::as_tibble(
+    DBI::dbGetQuery(con, paste0("SELECT * FROM ", table))
+  )
+}
+
+
+# ------------------------------------------------------------------
+# Hourly aggregated tables
+# ------------------------------------------------------------------
+
+#' Get myair hourly data
+#'
+#' @param con A DBI connection.
+#'
+#' @return A tibble.
+#' @export
+myair_hourly <- function(con) {
+  db_read_table(con, "myair_hourly")
+}
+
+
+#' Get gps hourly data
+#'
+#' @param con A DBI connection.
+#'
+#' @return A tibble.
+#' @export
+gps_hourly <- function(con) {
+  db_read_table(con, "gps_hourly")
+}
+
+
+#' Get smartwatch high hourly data
+#'
+#' @param con A DBI connection.
+#'
+#' @return A tibble.
+#' @export
+smartwatchhigh_hourly <- function(con) {
+  db_read_table(con, "smartwatchhigh_hourly")
+}
+
+
+#' Get smartwatch low hourly data
+#'
+#' @param con A DBI connection.
+#'
+#' @return A tibble.
+#' @export
+smartwatchlow_hourly <- function(con) {
+  db_read_table(con, "smartwatchlow_hourly")
+}
+
+
+# ------------------------------------------------------------------
+# Procedures without thresholds
+# ------------------------------------------------------------------
+
+#' Get active accounts
+#'
+#' @param con A DBI connection.
+#'
+#' @return A tibble.
+#' @export
+active_accounts <- function(con) {
+  db_call_procedure(con, "sp_active_accounts", character(0))
+}
+
+
+#' Get sleep tidy data
+#'
+#' Calls `sp_sleep_tidy` with all parameters set to NULL.
+#'
+#' @param con A DBI connection.
+#'
+#' @return A tibble.
+#' @export
+sleep_tidy <- function(con) {
+  params <- rep("NULL", 5)
+  
+  db_call_procedure(con, "sp_sleep_tidy", params)
+}
+
+
+# ------------------------------------------------------------------
+# Daily procedures with min_valid_n
+# ------------------------------------------------------------------
+
+#' Get myair daily data
+#'
+#' Calls `sp_myair_daily` using `min_valid_n` as the default threshold
+#' and NULL for all optional filters / metric-specific thresholds.
+#'
+#' @param con A DBI connection.
+#' @param min_valid_n Minimum valid observations required.
+#'
+#' @return A tibble.
+#' @export
+myair_daily <- function(con, min_valid_n) {
+  stopifnot(
+    length(min_valid_n) == 1,
+    !is.na(min_valid_n),
+    is.numeric(min_valid_n)
+  )
+  
+  params <- c(
+    as.character(min_valid_n),
+    rep("NULL", 19)
+  )
+  
+  db_call_procedure(con, "sp_myair_daily", params)
+}
+
+
+#' Get gps daily data
+#'
+#' Calls `sp_gps_daily` using `min_valid_n` as the default threshold
+#' and NULL for all optional filters / metric-specific thresholds.
+#'
+#' @param con A DBI connection.
+#' @param min_valid_n Minimum valid observations required.
+#'
+#' @return A tibble.
+#' @export
+gps_daily <- function(con, min_valid_n) {
+  stopifnot(
+    length(min_valid_n) == 1,
+    !is.na(min_valid_n),
+    is.numeric(min_valid_n)
+  )
+  
+  params <- c(
+    as.character(min_valid_n),
+    rep("NULL", 7)
+  )
+  
+  db_call_procedure(con, "sp_gps_daily", params)
+}
+
+
+#' Get smartwatch high daily data
+#'
+#' Calls `sp_smartwatchhigh_daily` using `min_valid_n` as the default threshold
+#' and NULL for all optional filters / metric-specific thresholds.
+#'
+#' @param con A DBI connection.
+#' @param min_valid_n Minimum valid observations required.
+#'
+#' @return A tibble.
+#' @export
+smartwatchhigh_daily <- function(con, min_valid_n) {
+  stopifnot(
+    length(min_valid_n) == 1,
+    !is.na(min_valid_n),
+    is.numeric(min_valid_n)
+  )
+  
+  params <- c(
+    as.character(min_valid_n),
+    rep("NULL", 8)
+  )
+  
+  db_call_procedure(con, "sp_smartwatchhigh_daily", params)
+}
+
+
+#' Get smartwatch low daily data
+#'
+#' Calls `sp_smartwatchlow_daily` using `min_valid_n` as the default threshold
+#' and NULL for all optional filters / metric-specific thresholds.
+#'
+#' @param con A DBI connection.
+#' @param min_valid_n Minimum valid observations required.
+#'
+#' @return A tibble.
+#' @export
+smartwatchlow_daily <- function(con, min_valid_n) {
+  stopifnot(
+    length(min_valid_n) == 1,
+    !is.na(min_valid_n),
+    is.numeric(min_valid_n)
+  )
+  
+  params <- c(
+    as.character(min_valid_n),
+    rep("NULL", 10)
+  )
+  
+  db_call_procedure(con, "sp_smartwatchlow_daily", params)
+}

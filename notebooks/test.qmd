@@ -1,0 +1,20 @@
+---
+title: "test"
+format: html
+editor: visual
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+```
+
+```{r}
+source(here::here("scripts", "load_functions.R"))
+trigger <- load_trigger_functions()
+con <- trigger$connect_trigger_db()
+```
+
+```{r}
+trigger$etl_myair_hourly(con)
+```
+
