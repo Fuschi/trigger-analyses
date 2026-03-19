@@ -1,0 +1,212 @@
+---
+title: "HF_distributions"
+format: html
+editor: source
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+
+source(here::here("scripts", "load_functions.R"))
+triggerR <- load_trigger_functions()
+```
+
+```{r}
+accounts <- if (!exists("accounts")) {
+  triggerR$active_accounts()
+} else accounts
+
+trigger_daily <- if (!exists("trigger_daily")) {
+  triggerR$read_trigger_tables(granularity = "daily", cores = 5)
+} else trigger_daily
+
+trigger_hourly <- if (!exists("trigger_hourly")) {
+  triggerR$read_trigger_tables(granularity = "hourly", cores = 5)
+} else trigger_hourly
+```
+
+```{r}
+hf_daily <- trigger_daily %>%
+  filter(!is.na(userId), source != "sleep") %>%
+  filter(date >= as.Date("2025-03-01"), date <= Sys.Date())
+```
+
+## Distribution of records per user
+
+```{r}
+p_user_dist <- hf_daily %>%
+  group_by(userId) %>%
+  summarise(n = sum(n_records_total), .groups = "drop") %>%
+  ggplot(aes(n)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "darkblue") +
+  scale_x_log10() +
+  theme_minimal(base_size = 14) +
+  labs(x = "Total records per user (log10)", y = "Number of users", title = "Distribution of records per user")
+
+p_user_dist
+```
+
+```{r}
+ggsave(here::here("outputs", "HF_distribution_records_per_user.png"), 
+       plot = p_user_dist, width = 7, height = 5, dpi = 300)
+```
+
+## Distribution of daily records
+
+```{r}
+p_day_dist <- hf_daily %>%
+  group_by(date) %>%
+  summarise(n = sum(n_records_total), .groups = "drop") %>%
+  ggplot(aes(n)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "darkblue") +
+  scale_x_log10() +
+  theme_minimal(base_size = 14) +
+  labs(x = "Records per day (log10)", y = "Frequency", title = "Distribution of daily records")
+
+p_day_dist
+```
+
+```{r}
+ggsave(here::here("outputs", "HF_distribution_records_per_day.png"),
+       plot = p_day_dist, width = 7, height = 5, dpi = 300)
+```
+
+## Distribution of daily records by source
+
+```{r}
+p_source_box <- hf_daily %>%
+  group_by(source, date) %>%
+  summarise(n = sum(n_records_total), .groups = "drop") %>%
+  ggplot(aes(x = source, y = n,, fill = source)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  theme_minimal(base_size = 14) +
+  labs(x = NULL, y = "Records per day (log10)", title = "Distribution of daily records by source") +
+  theme(legend.position = "none")
+
+p_source_box
+```
+
+```{r}
+ggsave(here::here("outputs", "HF_distribution_records_by_source_boxplot.png"), 
+       plot = p_source_box, width = 8, height = 6, dpi = 300)
+```
+
+## Distribution of user-day records
+
+```{r}
+p_userday_dist <- hf_daily %>%
+  ggplot(aes(n_records_total)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "darkblue") +
+  scale_x_log10() +
+  theme_minimal(base_size = 14) +
+  labs(x = "Records per user-day (log10)", y = "Frequency", title = "Distribution of records per user-day")
+
+p_userday_dist
+```
+
+```{r}
+ggsave(here::here("outputs", "HF_distribution_records_per_user_day.png"), 
+       plot = p_userday_dist, width = 7, height = 5, dpi = 300)
+```
+
+```{r}
+rm(list = ls(pattern = "^p_"))
+rm(hf_daily)
+```
+
+## Measurments Histograms
+
+```{r, fig.width=16, fig.height=12}
+p_dens_HF <- trigger_hourly %>%
+  filter(!is.na(userId), source != "sleep", type == "mean", !is.na(value)) %>%
+  filter(date >= as.Date("2025-03-01"), date <= Sys.Date()) %>%
+  select(source, userId, date, hour, n_obs_valid, measurement, value) %>%
+  ggplot(aes(x = value, fill = source)) + 
+  geom_density() +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  facet_wrap(~measurement, scales = "free", ncol = 5)
+
+p_dens_HF
+```
+
+```{r, fig.width=8, fig.height=6}
+p_dens_HF_pm_pc <- trigger_hourly %>%
+  filter(!is.na(userId), source != "sleep", type == "mean", !is.na(value)) %>%
+  filter(date >= as.Date("2025-03-01"), date <= Sys.Date(), str_detect(measurement, "^(pm|pc)")) %>%
+  mutate(value_log1p = log10(value + 1)) %>%
+  ggplot(aes(x = value_log1p)) +
+  geom_density(fill = "lightblue") +
+  facet_wrap(~measurement, scales = "free") +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(x = "log10(value + 1)", y = "Density")
+
+p_dens_HF_pm_pc
+```
+
+```{r}
+ggsave(here::here("outputs", "HF_measurement_density_all.png"),
+       plot = p_dens_HF, width = 16, height = 12, dpi = 300)
+ggsave(here::here("outputs", "HF_measurement_density_pm_pc_log.png"),
+       plot = p_dens_HF_pm_pc, width = 8, height = 6, dpi = 300)
+```
+
+```{r, fig.width=16, fig.height=12}
+ p_dens_valid_HF <- trigger_hourly %>%
+  filter(!is.na(userId), source != "sleep", type == "mean", !is.na(value)) %>%
+  filter(date >= as.Date("2025-03-01"), date <= Sys.Date()) %>%
+  select(source, userId, date, hour, n_obs_valid, measurement, value) %>%
+  mutate(n_obs_valid = as.integer(n_obs_valid)) %>%
+  filter(n_obs_valid <= 60) %>%
+  ggplot(aes(x = n_obs_valid, fill = source)) + 
+  geom_bar() +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  facet_wrap(~measurement, scales = "free", ncol = 5)
+
+p_dens_valid_HF
+```
+
+```{r}
+ggsave(here::here("outputs", "HF_n_obs_valid_distribution.png"),
+       plot = p_dens_valid_HF, width = 16, height = 12, dpi = 300)
+```
+
+```{r, fig.width=12, fig.height=9}
+p_value_missing_HF <- trigger_hourly %>%
+  filter(!is.na(userId), source != "sleep", type == "mean") %>%
+  filter(date >= as.Date("2025-03-01"), date <= Sys.Date()) %>%
+  mutate(value_status = if_else(is.na(value), "Missing value", "Valid value"),
+         value_status = factor(value_status, levels = c("Valid value", "Missing value"))) %>%
+  count(measurement, value_status) %>%
+  ggplot(aes(x = value_status, y = n, fill = value_status)) +
+  geom_col() +
+  geom_text(aes(label = n), vjust = 1, size = 5) +
+  facet_wrap(~measurement, scales = "free_y", ncol = 5) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(
+    x = NULL,
+    y = "Number of observations",
+    fill = NULL,
+    title = "Availability of measurements",
+    subtitle = "Absolute counts of valid and missing values for each measurement"
+  )
+
+p_value_missing_HF
+```
+
+```{r}
+ggsave(here::here("outputs", "HF_value_availability_by_measurement.png"),
+       plot = p_value_missing_HF, width = 12, height = 9, dpi = 300)
+```
+
+```{r}
+rm(list = ls(pattern = "^p_"))
+```
+
+
+
+
