@@ -11,10 +11,16 @@ library(tidyverse)
 ```{r}
 source(here::here("scripts", "load_functions.R"))
 trigger <- load_trigger_functions()
-con <- trigger$connect_trigger_db()
 ```
 
 ```{r}
-trigger$etl_myair_hourly(con)
+hourly_long <- trigger$read_trigger_tables(
+  granularity = "hourly", output = "long",
+  cores = 4, verbose = T)
 ```
 
+```{r}
+daily_long <- trigger$read_trigger_tables(
+  granularity = "daily", output = "long", min_obs_per_hour = 10,
+  cores = 4, verbose = T)
+```

@@ -102,19 +102,14 @@ start_ssh_tunnel <- function() {
 #'   \item MariaDB is reachable at `127.0.0.1:3336` from your local machine.
 #' }
 #'
-#' ## Connection parameters
-#'
-#' These are directly set inside the function (no hidden envs):
-#' \itemize{
-#'   \item host = "127.0.0.1"
-#'   \item port = 3336
-#'   \item db   = "triggerIO"
-#'   \item user = "triggerIO"
-#'   \item pwd  = "triggerIO"
-#' }
-#'
 #' The function loads the required packages internally and returns an active
 #' \code{DBIConnection} object.
+#'
+#' @param host Database host. Defaults to `"127.0.0.1"`.
+#' @param port Database port. Defaults to `3336`.
+#' @param user Database user. Defaults to `"triggerIO"`.
+#' @param password Database password. Defaults to `"triggerIO"`.
+#' @param dbname Database name. Defaults to `"triggerIO"`.
 #'
 #' @return A \code{DBIConnection} object pointing to the remote triggerIO
 #'         MariaDB instance.
@@ -129,7 +124,11 @@ start_ssh_tunnel <- function() {
 #' }
 #'
 #' @export
-connect_trigger_db <- function() {
+connect_trigger_db <- function(host = "127.0.0.1",
+                               port = 3336L,
+                               user = "triggerIO",
+                               password = "triggerIO",
+                               dbname = "triggerIO") {
   
   # Load required packages without attaching them
   if (!requireNamespace("DBI", quietly = TRUE))
@@ -139,10 +138,46 @@ connect_trigger_db <- function() {
   
   DBI::dbConnect(
     RMariaDB::MariaDB(),
-    host     = "127.0.0.1",
-    port     = 3336L,
-    user     = "triggerIO",
-    password = "triggerIO",
-    dbname   = "triggerIO"
+    host     = host,
+    port     = port,
+    user     = user,
+    password = password,
+    dbname   = dbname
   )
+}
+
+
+#' Run a SQL query directly on the triggerIO database
+#'
+#' This helper opens a connection using the default TriggerIO parameters,
+#' runs the supplied query, returns the result as a tibble, and closes the
+#' connection automatically.
+#'
+#' @param query A single SQL query string.
+#' @param host Database host. Defaults to `"127.0.0.1"`.
+#' @param port Database port. Defaults to `3336`.
+#' @param user Database user. Defaults to `"triggerIO"`.
+#' @param password Database password. Defaults to `"triggerIO"`.
+#' @param dbname Database name. Defaults to `"triggerIO"`.
+#'
+#' @return A tibble.
+#' @export
+query_trigger_db <- function(query,
+                             host = "127.0.0.1",
+                             port = 3336L,
+                             user = "triggerIO",
+                             password = "triggerIO",
+                             dbname = "triggerIO") {
+  stopifnot(is.character(query), length(query) == 1, !is.na(query))
+
+  con <- connect_trigger_db(
+    host = host,
+    port = port,
+    user = user,
+    password = password,
+    dbname = dbname
+  )
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  tibble::as_tibble(DBI::dbGetQuery(con, query))
 }

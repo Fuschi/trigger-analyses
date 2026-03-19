@@ -1,0 +1,26 @@
+---
+title: "Team Update"
+format:
+  revealjs:
+    slide-number: true
+editor: visual
+---
+
+## Overview
+
+- This slide deck should only reference exported plots from `outputs/`.
+- Keep data manipulation and plot generation in `notebooks/`.
+
+## Example Figure
+
+```{r}
+#| echo: false
+#| results: asis
+
+knitr::include_graphics(here::here("outputs", "plot_example.png"))
+```
+
+## Notes
+
+- Replace the example file with real exported plots.
+- Add one slide per figure or per message.

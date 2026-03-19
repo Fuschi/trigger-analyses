@@ -25,8 +25,18 @@ load_trigger_functions <- function(path = here::here("R")) {
     full.names = TRUE
   )
   
-  # Sort files to ensure deterministic loading order
+  # Sort files to ensure deterministic loading order and load
+  # lower-level database helpers before higher-level readers.
   files <- sort(files)
+
+  priority_files <- c(
+    file.path(path, "db_connection.R"),
+    file.path(path, "db_procedures.R"),
+    file.path(path, "read_trigger_tables.R")
+  )
+
+  priority_files <- priority_files[priority_files %in% files]
+  files <- c(priority_files, setdiff(files, priority_files))
   
   # Source each file into the environment
   for (file in files) {
