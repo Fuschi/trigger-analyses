@@ -135,7 +135,8 @@ smartwatchlow_hourly <- function(con = NULL) {
 #' @return A tibble.
 #' @export
 active_accounts <- function(con = NULL) {
-  db_call_procedure(con, "sp_active_accounts", character(0))
+  db_call_procedure(con, "sp_active_accounts", character(0)) |>
+    dplyr::mutate(userId = forcats::as_factor(as.character(userId)))
 }
 
 

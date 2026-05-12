@@ -1,0 +1,146 @@
+---
+title: "correlation_analysis"
+format: html
+editor: source
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+
+source("../../R/load_functions.R")
+triggerR <- load_trigger_functions()
+rm(load_trigger_functions)
+dir.create("../../outputs/correlation_analysis", showWarnings = F)
+```
+
+```{r}
+accounts <- if (!exists("accounts")) {
+  triggerR$active_accounts()
+} else accounts
+
+trigger_daily <- if (!exists("trigger_daily")) {
+  triggerR$read_trigger_tables(granularity = "daily", cores = 5, min_obs_per_hour = 10)
+} else trigger_daily
+
+trigger_hourly <- if (!exists("trigger_hourly")) {
+  triggerR$read_trigger_tables(granularity = "hourly", cores = 5)
+} else trigger_hourly
+```
+
+
+## Filtering
+
+```{r}
+df_hourly <- trigger_hourly %>%
+  filter(!is.na(userId), type %in% c("sum", "mean"),
+         source != "gps") %>%
+  filter(date >= as.Date("2025-03-01"), date <= Sys.Date(),
+         n_obs_valid >= 10) %>%
+  select(userId, date, hour, source, measurement, value) %>%
+  # filter(! measurement %in% c("skintemp", "bodytemp", "oxygens", "sleeprate")) %>%
+  filter(! measurement %in% c("oxygens", "sleeprate")) %>%
+  distinct() %>%
+  unite("sample_id", userId, date, hour, sep = "_", remove = F) 
+```
+
+```{r}
+all_measurements <- df_hourly %>%
+  distinct(measurement) %>%
+  pull(measurement)
+```
+
+```{r}
+mat_hourly <- df_hourly %>%
+  select(sample_id, measurement, value) %>%
+  filter(sample_id != "61_2025-07-30_0") %>%
+  group_by(sample_id) %>%
+  filter(n() == length(all_measurements)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = "measurement", values_from = "value") %>%
+  column_to_rownames("sample_id") %>% as.matrix()
+
+meta_hourly <- df_hourly %>%
+  filter(sample_id %in% rownames(mat_hourly)) %>%
+  select(sample_id:hour) %>%
+  distinct()
+```
+
+
+```{r, fig.width=8, fig.height=8, warning=FALSE}
+p_cor_hourly_pearson <- cor(mat_hourly, use = "pairwise.complete.obs", method = "pearson") %>%
+  as_tibble(rownames = "Var1") %>%
+  pivot_longer(-Var1, names_to = "Var2", values_to = "cor") %>%
+  filter(Var1 < Var2) %>%
+  ggplot(aes(x = Var1, y = Var2, fill = cor)) +
+  geom_tile(color = "grey") +
+  scale_fill_gradient2(
+    low = "#3B4CC0", mid = "white", high = "#B40426",
+    midpoint = 0, limits = c(-1, 1), name = "Pearson\nCorrelation",
+    na.value = "black") +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_blank()) +
+  coord_equal() +
+  labs(title = "Linear relationships among hourly measurements",
+       subtitle = "Pearson correlation captures linear associations",
+       x = NULL, y = NULL) +
+  geom_text(aes(label = ifelse(abs(cor) >= 0.3, sprintf("%.2f", cor), "")), size = 3) +
+  theme(legend.position = c(0.7, 0.25))
+
+p_cor_hourly_pearson
+```
+
+```{r, fig.width=8, fig.height=8, warning=FALSE}
+p_cor_hourly_spearman <- cor(mat_hourly, use = "pairwise.complete.obs", method = "spearman") %>%
+  as_tibble(rownames = "Var1") %>%
+  pivot_longer(-Var1, names_to = "Var2", values_to = "cor") %>%
+  filter(Var1 < Var2) %>%
+  ggplot(aes(x = Var1, y = Var2, fill = cor)) +
+  geom_tile(color = "grey") +
+  scale_fill_gradient2(
+    low = "#3B4CC0", mid = "white", high = "#B40426",
+    midpoint = 0, limits = c(-1, 1), name = "Spearman\nCorrelation",
+    na.value = "black") +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_blank()) +
+  coord_equal() +
+  geom_text(aes(label = ifelse(abs(cor) >= 0.3, sprintf("%.2f", cor), "")), size = 3) +
+  theme(legend.position = c(0.7, 0.25)) +
+  labs(title = "Monotonic relationships among hourly measurements",
+       subtitle = "Spearman correlation captures rank-based associations",
+       x = NULL, y = NULL)
+
+p_cor_hourly_spearman
+```
+
+```{r, fig.width=16, fig.height=8}
+p_correlation_panel <- ggpubr::ggarrange(p_cor_hourly_pearson, p_cor_hourly_spearman)
+p_correlation_panel
+```
+
+
+
+```{r}
+ggsave(
+  filename = "../../outputs/correlation_analysis/correlation_pearson.png",
+  plot = p_cor_hourly_pearson, width = 8, height = 8, dpi = 300)
+
+ggsave(
+  filename = "../../outputs/correlation_analysis/correlation_spearman.png",
+  plot = p_cor_hourly_spearman, width = 8, height = 8, dpi = 300)
+
+ggsave(
+  filename = "../../outputs/correlation_analysis/correlation_hourlypanel.png",
+  plot = p_correlation_panel, width = 16, height = 8, dpi = 300)
+```
+
+```{r}
+rm(list = ls(pattern = "^p_"))
+rm(all_measurements, meta_hourly, mat_hourly)
+```
+

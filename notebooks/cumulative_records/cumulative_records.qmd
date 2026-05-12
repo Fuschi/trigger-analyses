@@ -1,0 +1,165 @@
+---
+title: "cumulative_records"
+format: html
+editor: source
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+library(scales)
+
+source("../../R/load_functions.R")
+triggerR <- load_trigger_functions()
+rm(load_trigger_functions)
+dir.create("../../outputs/cumulative_records", showWarnings = F)
+```
+
+```{r}
+accounts <- if (!exists("accounts")) {
+  triggerR$active_accounts()
+} else accounts
+
+trigger_daily <- if (!exists("trigger_daily")) {
+  triggerR$read_trigger_tables(granularity = "daily", cores = 5)
+} else trigger_daily
+```
+
+```{r, fig.width=5, fig.height=5}
+df_cum <- trigger_daily %>%
+  filter(!is.na(userId), source != "sleep") %>%
+  filter(date >= as.Date("2025-03-01"),
+         date <= Sys.Date()) %>%
+  group_by(source, date) %>%
+  summarise(n = sum(n_records_total), .groups = "drop") %>%
+  arrange(source, date) %>%
+  group_by(source) %>%
+  mutate(cum_n = cumsum(n)) %>%
+  ungroup()
+
+# totale
+df_tot <- df_cum %>%
+  group_by(date) %>%
+  summarise(cum_n = sum(n), .groups = "drop") %>%
+  arrange(date) %>%
+  mutate(cum_n = cumsum(cum_n),
+         source = "total")
+
+p_source <- bind_rows(df_cum, df_tot) %>%
+  ggplot(aes(date, cum_n, color = source)) +
+  geom_line(linewidth = 1) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = NULL,
+    y = "Cumulative records",
+    color = "Source") +
+  scale_color_discrete(guide = guide_legend(nrow = 2)) +
+  scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+  theme(legend.position = "bottom")
+
+p_source
+```
+
+
+```{r, fig.width=5, fig.height=5}
+df_cum <- trigger_daily %>%
+  filter(!is.na(userId), source != "sleep") %>%
+  filter(date >= as.Date("2025-03-01"),
+         date <= Sys.Date()) %>%
+  left_join(accounts, by = "userId") %>%
+  group_by(country, date) %>%
+  summarise(n = sum(n_records_total), .groups = "drop") %>%
+  arrange(country, date) %>%
+  group_by(country) %>%
+  mutate(cum_n = cumsum(n)) %>%
+  ungroup()
+
+# totale
+df_tot <- df_cum %>%
+  group_by(date) %>%
+  summarise(cum_n = sum(n), .groups = "drop") %>%
+  arrange(date) %>%
+  mutate(cum_n = cumsum(cum_n),
+         country = "Total")
+
+p_country <- bind_rows(df_cum, df_tot) %>%
+  ggplot(aes(date, cum_n, color = country)) +
+  geom_line(linewidth = 1) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = NULL,
+    y = "Cumulative records",
+    color = "Source") +
+  scale_color_discrete(guide = guide_legend(nrow = 2)) +
+  scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+  theme(legend.position = "bottom")
+
+p_country
+```
+
+```{r}
+ggsave("../../outputs/cumulative_records/HF_cumulative_records_by_source.png",
+       plot = p_source, width = 5, height = 5, dpi = 300)
+
+ggsave("../../outputs/cumulative_records/HF_cumulative_records_by_country.png",
+       plot = p_country, width = 5, height = 5, dpi = 300)
+```
+
+## Cumulative Users
+
+```{r, fig.width=5, fig.height=5}
+p_users <- trigger_daily %>%
+  filter(!is.na(userId), source != "sleep") %>%
+  filter(date >= as.Date("2025-03-01"),
+         date <= Sys.Date()) %>%
+  group_by(userId) %>%
+  summarise(first_date = min(date), .groups = "drop") %>%
+  group_by(first_date) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  arrange(first_date) %>%
+  mutate(cum_users = cumsum(n)) %>%
+  ggplot(aes(first_date, cum_users)) +
+  geom_line(linewidth = 1, color = "darkblue") +
+  geom_area(fill = "lightblue", alpha = .5) +
+  theme_minimal(base_size = 14) +
+  labs(x = NULL, y = "Cumulative users",
+       title = "Cumulative number of users over time")
+p_users
+```
+
+```{r}
+ggsave("../../outputs/cumulative_records/HF_cumulative_users.png", width = 5, height = 5, dpi = 300)
+```
+
+```{r, fig.width=10, fig.height=5, message=FALSE}
+p_country <- p_country +
+  labs(
+    title = "Cumulative records by country",
+    subtitle = "Growth of processed records over time"
+  )
+
+p_users <- p_users +
+  labs(
+    title = "Cumulative number of users",
+    subtitle = "Users contributing at least one measurement"
+  )
+
+p_panel_cumulative <- ggpubr::ggarrange(
+  p_country + scale_color_discrete(guide = guide_legend(nrow = 1)),
+  p_users,
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+p_panel_cumulative
+```
+
+```{r}
+ggsave("../../outputs/cumulative_records/cumulative_panel.png", width = 10, height = 5, dpi = 300,
+       plot = p_panel_cumulative)
+```
+
+
+```{r}
+rm(df_cum, df_tot, p_country, p_source, p_users, p_panel_cumulative)
+```
+

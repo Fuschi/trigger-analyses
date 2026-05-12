@@ -101,6 +101,20 @@ read_one_trigger_table <- function(tbl,
   reader <- requested_readers[[tbl]]
 
   if (granularity == "daily" && tbl != "sleep") {
+    read_one_trigger_table <- function(tbl,
+                                   requested_readers,
+                                   granularity,
+                                   min_obs_per_hour,
+                                   con) {
+  reader <- requested_readers[[tbl]]
+
+  if (granularity == "daily" && tbl != "sleep") {
+    min_valid_n <- max(min_obs_per_hour - 1, 0)
+    reader(con, min_valid_n = min_obs_per_hour)
+  } else {
+    reader(con)
+  }
+}
     reader(con, min_valid_n = min_obs_per_hour)
   } else {
     reader(con)
