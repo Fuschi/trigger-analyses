@@ -292,7 +292,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </figure>
 </div>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"../../outputs/pacmap_env.png"</span>, p_pacmap_env,</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"../../outputs/dimensionality_reduction/pacmap_env.png"</span>, p_pacmap_env,</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>       <span class="at">width =</span> <span class="dv">8</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
@@ -331,7 +331,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">13</span>) <span class="sc">+</span></span>
 <span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_fixed</span>() <span class="sc">+</span></span>
 <span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"top"</span>) <span class="sc">+</span></span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"PaCMAP - Environmental trigger"</span>) <span class="sc">+</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"PaCMAP - Physiological trigger"</span>) <span class="sc">+</span></span>
 <span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">guides</span>(<span class="at">color =</span> <span class="fu">guide_legend</span>(<span class="at">nrow =</span> <span class="dv">1</span>))</span>
 <span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>p_pacmap_phy</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -342,7 +342,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </figure>
 </div>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"../../outputs/pacmap_phy.png"</span>, p_pacmap_phy,</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"../../outputs/dimensionality_reduction/pacmap_phy.png"</span>, p_pacmap_phy,</span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>       <span class="at">width =</span> <span class="dv">8</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell">
@@ -356,9 +356,9 @@ Number of permutations: 999
 
 vegan::adonis2(formula = dist(scale(daily_phy_sub$data)) ~ userId, data = daily_phy_sub$meta, permutations = 999)
            Df SumOfSqs      R2      F Pr(&gt;F)    
-Model       7     5218 0.24218 69.942  0.001 ***
-Residual 1532    16328 0.75782                  
-Total    1539    21546 1.00000                  
+Model       7   5227.6 0.24231 70.082  0.001 ***
+Residual 1534  16346.4 0.75769                  
+Total    1541  21574.0 1.00000                  
 ---
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
@@ -375,8 +375,8 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 
 Response: Distances
             Df  Sum Sq Mean Sq F value    Pr(&gt;F)    
-Groups       7  311.95  44.564  24.894 &lt; 2.2e-16 ***
-Residuals 1532 2742.48   1.790                      
+Groups       7  312.84  44.691   24.98 &lt; 2.2e-16 ***
+Residuals 1534 2744.47   1.789                      
 ---
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
@@ -391,9 +391,9 @@ Permutation: free
 Number of permutations: 999
 
 Response: Distances
-            Df  Sum Sq Mean Sq      F N.Perm Pr(&gt;F)    
-Groups       7  311.95  44.564 24.894    999  0.001 ***
-Residuals 1532 2742.48   1.790                         
+            Df  Sum Sq Mean Sq     F N.Perm Pr(&gt;F)    
+Groups       7  312.84  44.691 24.98    999  0.001 ***
+Residuals 1534 2744.47   1.789                        
 ---
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
@@ -414,7 +414,7 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(phy_sil[, <span class="st">"sil_width"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[1] 0.02034763</code></pre>
+<pre><code>[1] 0.02029084</code></pre>
 </div>
 </div>
 <p>Although PERMANOVA showed a significant effect of <code>userId</code> on scaled physiological profiles using Euclidean distance (<code>vegan::adonis2</code>: R² = 0.242, F = 69.942, p = 0.001), the average silhouette width was close to zero (mean silhouette = 0.020). This indicates that users do not form clearly separated and compact clusters in the original multivariate space. Moreover, the significant dispersion test (<code>vegan::betadisper</code>: F = 24.894, p = 0.001) suggests that the subject-specific structure is partly associated with differences in within-user variability. Overall, <code>userId</code> has a statistically significant effect on physiological profiles, but the separation among users should be interpreted as partial rather than as well-defined clustering.</p>

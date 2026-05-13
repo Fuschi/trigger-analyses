@@ -169,7 +169,7 @@ p_pacmap_env <- as_tibble(pacmap_env) |>
 
 p_pacmap_env
 
-ggsave("../../outputs/pacmap_env.png", p_pacmap_env,
+ggsave("../../outputs/dimensionality_reduction/pacmap_env.png", p_pacmap_env,
        width = 8, height = 8, dpi = 300)
 ```
 
@@ -210,12 +210,12 @@ p_pacmap_phy <- pacmap_phy |>
   theme_minimal(base_size = 13) +
   coord_fixed() +
   theme(legend.position = "top") +
-  labs(title = "PaCMAP - Environmental trigger") +
+  labs(title = "PaCMAP - Physiological trigger") +
   guides(color = guide_legend(nrow = 1))
 
 p_pacmap_phy
 
-ggsave("../../outputs/pacmap_phy.png", p_pacmap_phy,
+ggsave("../../outputs/dimensionality_reduction/pacmap_phy.png", p_pacmap_phy,
        width = 8, height = 8, dpi = 300)
 ```
 
