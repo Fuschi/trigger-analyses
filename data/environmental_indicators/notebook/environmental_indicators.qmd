@@ -1,0 +1,74 @@
+---
+title: "environmental_indicators"
+format: html
+editor: source
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+```{r}
+tbl_heat <- list.files("../raw/", full.names = TRUE) %>%
+  map(function(path) {
+    city <- basename(path) %>%
+      stringr::str_remove("^heatwave_") %>%
+      stringr::str_remove("_2025_with_t2m_utci\\.csv$")
+    
+    txt <- readr::read_file(path) %>%
+      stringr::str_replace_all("\r\r\n", "\n") %>%
+      stringr::str_replace_all("\r\n", "\n") %>%
+      stringr::str_replace_all("\r", "\n")
+    
+    read_csv(
+      I(txt),
+      col_types = cols(
+        date = col_character(),
+        utci_daily_mean = col_double(),
+        t2m_daily_mean = col_double(),
+        posEHF = col_character(),
+        Euroheat = col_character()
+      ),
+      skip_empty_rows = TRUE
+    ) %>%
+      filter(!is.na(date), date != "") %>%
+      mutate(
+        city = stringr::str_to_title(city),
+        date = lubridate::as_date(date),
+        posEHF = posEHF == "True",
+        Euroheat = Euroheat == "True",
+        .before = 1
+      )
+  }) %>%
+  bind_rows() 
+```
+
+```{r}
+tbl_heat <- tbl_heat %>%
+  mutate(heatwave_type = case_when(posEHF & Euroheat ~ "both",
+                                   posEHF & !Euroheat ~ "ehf_only",
+                                   !posEHF & Euroheat ~ "euroheat_only",
+                                   TRUE ~ "no_event"),
+         heatwave_type = factor(heatwave_type,
+                                levels = c("normal", "ehf_only",
+                                           "euroheat_only", "no_event")))
+```
+
+```{r}
+write_csv(tbl_heat, "../processed/thermal_daily_2025.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
