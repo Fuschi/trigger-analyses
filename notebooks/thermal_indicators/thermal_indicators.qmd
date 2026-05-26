@@ -1,0 +1,180 @@
+---
+title: "thermal_indicators"
+format: html
+editor: source
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(gt)
+
+source("../../R/load_functions.R")
+triggerR <- load_trigger_functions()
+rm(load_trigger_functions)
+
+thermal_daily <- read_csv("../../data/environmental_indicators/processed/thermal_daily_2025.csv")
+accounts <- triggerR$active_accounts()
+
+trigger_daily <- if (!exists("trigger_daily")) {
+  triggerR$read_trigger_tables(granularity = "daily", cores = 5, min_obs_per_hour = 10)
+} else trigger_daily
+
+dir.create("../../outputs/thermal_indicators", recursive = TRUE, showWarnings = FALSE)
+```
+
+## Check
+
+```{r, fig.width=9, fig.height=3}
+thermal_daily %>%
+  filter(heatwave_type != "no_event") %>%
+  count(city, heatwave_type) %>%
+  ggplot(aes(x = city, y = n, fill = heatwave_type)) +
+  geom_col(position = "dodge") +
+  theme_minimal(base_size = 13) +
+  labs(x = NULL, y = "Number of heatwave days", fill = "Heatwave type") +
+  scale_y_continuous(breaks = scales::breaks_width(2))
+```
+
+```{r}
+thermal_daily %>%
+  group_by(city) %>%
+  summarise(
+    mean_t2m = mean(t2m_daily_mean, na.rm = TRUE),
+    sd_t2m = sd(t2m_daily_mean, na.rm = TRUE),
+    min_t2m = min(t2m_daily_mean, na.rm = TRUE),
+    max_t2m = max(t2m_daily_mean, na.rm = TRUE),
+    mean_utci = mean(utci_daily_mean, na.rm = TRUE),
+    sd_utci = sd(utci_daily_mean, na.rm = TRUE),
+    min_utci = min(utci_daily_mean, na.rm = TRUE),
+    max_utci = max(utci_daily_mean, na.rm = TRUE),
+    .groups = "drop"
+  ) 
+```
+
+```{r, fig.width=9, fig.height=6}
+thermal_daily %>%
+  ggplot(aes(x = date, y = t2m_daily_mean, colour = heatwave_type)) +
+  geom_point(size = 1) +
+  facet_wrap(~ city, scales = "free_y") +
+  theme_minimal(base_size = 13) +
+  labs(x = NULL, y = "Daily mean temperature at 2 m") +
+  facet_wrap(~city, ncol = 1)
+```
+
+```{r}
+thermal_daily %>%
+  ggplot(aes(x = t2m_daily_mean, y = utci_daily_mean, color = city)) +
+  geom_point(alpha = 0.6) +
+  theme_minimal(base_size = 13) +
+  labs(
+    x = "Daily mean temperature at 2 m",
+    y = "Daily mean UTCI",
+    color = "City"
+  )
+```
+
+```{r}
+heatwave_runs <- thermal_daily %>%
+  arrange(city, date) %>%
+  group_by(city) %>%
+  mutate(
+    has_heatwave = heatwave_type != "no_event",
+    run_id = cumsum(has_heatwave != lag(has_heatwave, default = first(has_heatwave)))
+  ) %>%
+  group_by(city, run_id, has_heatwave) %>%
+  summarise(
+    start_date = min(date),
+    end_date = max(date),
+    duration_days = n(),
+    max_t2m = max(t2m_daily_mean, na.rm = TRUE),
+    max_utci = max(utci_daily_mean, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  filter(has_heatwave)
+
+heatwave_runs %>%
+  arrange(city, desc(duration_days))
+```
+
+```{r}
+heatwave_runs %>%
+  ggplot(aes(x = city, y = duration_days)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.1, height = 0) +
+  scale_y_continuous(breaks = scales::breaks_width(1)) +
+  theme_minimal(base_size = 13) +
+  labs(x = NULL,y = "Heatwave episode duration")
+```
+
+
+```{r}
+tbl <- trigger_daily %>%
+  mutate(userId = as.factor(userId)) %>%
+  left_join(accounts, by = "userId") %>%
+  mutate(city = case_when(country == "IT" ~ "Bologna",
+                          country == "GR" ~ "Heraklion",
+                          country == "DE" ~ "Augsburg",
+                          country == "CH" ~ "Geneve")) %>%
+  filter(source != "gps", n_hours_covered >= 16,
+         type %in% c("mean", "sum")) %>%
+  select(source, userId, date, measurement, value, country, city) %>%
+  left_join(thermal_daily, by = join_by(city, date)) %>%
+  filter(!is.na(heatwave_type))
+```
+
+```{r}
+tbl %>%
+  distinct(city, date, heatwave_type) %>%
+  filter(heatwave_type != "no_event") %>%
+  count(city, heatwave_type) %>%
+  ggplot(aes(x = city, y = n, fill = heatwave_type)) +
+  geom_col(position = "dodge") +
+  theme_minimal(base_size = 13) +
+  labs(x = NULL, y = "Number of heatwave days", fill = "Heatwave type") +
+  scale_y_continuous(breaks = scales::breaks_width(2))
+```
+
+```{r}
+wearable_thermal_daily <- tbl %>%
+  pivot_wider(names_from = measurement, values_from = value)
+
+wearable_thermal_daily %>%
+  filter(!is.na(heartrate), !is.na(heatwave_type)) %>%
+  group_by(heatwave_type) %>%
+  summarise(
+    n = n(),
+    mean_heartrate = mean(heartrate, na.rm = TRUE),
+    sd_heartrate = sd(heartrate, na.rm = TRUE),
+    median_heartrate = median(heartrate, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+```{r}
+wearable_thermal_daily <- wearable_thermal_daily %>%
+  group_by(userId) %>%
+  mutate(
+    heartrate_z = as.numeric(scale(heartrate)),
+    bphigh_z = as.numeric(scale(bphigh)),
+    bplow_z = as.numeric(scale(bplow))
+  ) %>%
+  ungroup()
+```
+
+```{r}
+wearable_thermal_daily %>%
+  filter(!is.na(heartrate_z), !is.na(heatwave_type)) %>%
+  ggplot(aes(x = heatwave_type, y = heartrate_z)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  theme_minimal(base_size = 13) +
+  labs(
+    x = NULL,
+    y = "Within-user scaled heart rate",
+    title = "Within-user heart rate deviations by heatwave type"
+  )
+```
+
+
+
+
+

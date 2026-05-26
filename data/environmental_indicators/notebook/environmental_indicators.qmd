@@ -45,13 +45,18 @@ tbl_heat <- list.files("../raw/", full.names = TRUE) %>%
 ```
 
 ```{r}
+any(tbl_heat$posEHF & tbl_heat$Euroheat)
+```
+
+
+```{r}
 tbl_heat <- tbl_heat %>%
   mutate(heatwave_type = case_when(posEHF & Euroheat ~ "both",
                                    posEHF & !Euroheat ~ "ehf_only",
                                    !posEHF & Euroheat ~ "euroheat_only",
                                    TRUE ~ "no_event"),
          heatwave_type = factor(heatwave_type,
-                                levels = c("normal", "ehf_only",
+                                levels = c("both", "ehf_only",
                                            "euroheat_only", "no_event")))
 ```
 
