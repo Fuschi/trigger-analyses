@@ -282,11 +282,10 @@ model_data_scaled_log <- model_data_log %>%
 ```{r}
 model_heartrate_global_log <- lmerTest::lmer(
   heartrate ~ 
-    #particle_small + particle_large + particle_mass + activity +
     particle + activity +
     temperature + humidity + pressure + sound + uvb + light +
     breathrate + bphigh + bplow + bodytemp + skintemp +
-    hour + wday + nationality + (1 | userId),
+    hour + nationality + (1 | userId),
   data = model_data_scaled_log,
   REML = FALSE)
 ```
@@ -303,62 +302,55 @@ performance::check_collinearity(model_heartrate_global_log)
 rm(model_data_scaled_log, model_data_log, continuous_predictors_log)
 ```
 
-## Linear Model Heartrate on not log data
+```{r, fig.width=4, fig.height=16}
+library(broom.mixed)
+library(gt)
+library(gtsummary)
 
-```{r}
-model_data <- trigger_hourly$data_pca %>%
-  as_tibble(rownames = "event") %>%
-  left_join(trigger_hourly$meta %>% as_tibble(rownames = "event"),
-            by = "event") %>%
-  rename(nationality = country) %>%
-  mutate(userId = factor(userId, levels = sort(unique(userId))),
-         nationality = factor(nationality), 
-         hour = factor(hour),
-         wday = lubridate::wday(date, label = TRUE, week_start = 1),
-         wday = factor(as.character(wday),
-                       levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")))
+gt_coef <- broom.mixed::tidy(model_heartrate_global_log, effects = "fixed") %>%
+  filter(
+    term != "(Intercept)",
+    !stringr::str_detect(term, "^hour")) %>%
+  mutate(
+    abs_estimate = abs(estimate),
+    p_value = gtsummary::style_pvalue(p.value, digits = 3),
+    significance = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      p.value < 0.1   ~ ".",
+      TRUE ~ ""
+    )
+  ) %>%
+  arrange(desc(abs_estimate)) %>%
+  select(term, estimate, std.error, significance) %>%
+  gt() %>%
+  fmt_number(
+    columns = c(estimate, std.error),
+    decimals = 3
+  ) %>%
+  cols_label(
+    term = "Predictor",
+    estimate = html("&beta;"),
+    std.error = "SE",
+    significance = "Significance"
+  ) %>%
+  tab_header(
+    title = "Fixed effects associated with heart rate",
+    subtitle = "Continuous predictors were scaled before model fitting"
+  ) %>%
+  tab_source_note(
+    source_note = "β values refer to one-standard-deviation increase in each continuous predictor."
+  )
+
+gt_coef
 ```
 
 ```{r}
-continuous_predictors <- c(
-  "particle_small", "particle_large", "particle_mass",
-  "temperature", "humidity", "pressure", "sound", "uvb", "light",
-  "breathrate", "bphigh", "bplow", "bodytemp", "skintemp", "activity")
-
-model_data_scaled <- model_data %>%
-  mutate(across(all_of(continuous_predictors), ~ scale(.x)))
-```
-
-```{r}
-model_heartrate_global <- lmerTest::lmer(
-  heartrate ~ 
-    particle_small + particle_large + particle_mass + activity +
-    temperature + humidity + pressure + sound + uvb + light +
-    breathrate + bphigh + bplow + bodytemp + skintemp +
-    hour + wday + nationality + (1 | userId),
-  data = model_data_scaled,
-  REML = FALSE)
-```
-
-```{r}
-summary(model_heartrate_global)
-```
-
-```{r}
-performance::check_collinearity(model_heartrate_global_log)
-```
-
-```{r}
-rm(model_data_scaled, model_data, continuous_predictors)
-```
-
-## Compare log model and not log model
-
-```{r}
-performance::compare_performance(
-  model_heartrate_global_log,
-  model_heartrate_global,
-  rank = TRUE)
+gtsave(
+  gt_coef,
+  filename = "../../outputs/physiology_environment_association/heartrate_model_coefficients.png"
+)
 ```
 
 
