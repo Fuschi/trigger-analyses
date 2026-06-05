@@ -20,7 +20,8 @@ accounts <- if (!exists("accounts")) {
 
 trigger_daily <- if (!exists("trigger_daily")) {
   triggerR$read_trigger_tables(granularity = "daily", cores = 5)
-} else trigger_daily
+} else trigger_daily %>%
+  mutate(userId = as.factor(userId))
 ```
 
 
