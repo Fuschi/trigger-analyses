@@ -163,8 +163,9 @@ wearable_thermal_daily <- wearable_thermal_daily %>%
 
 ```{r}
 wearable_thermal_daily %>%
-  filter(!is.na(heartrate_z), !is.na(heatwave_type)) %>%
-  ggplot(aes(x = heatwave_type, y = heartrate_z)) +
+  mutate(heatwave_try = posEHF | Euroheat) %>%
+  filter(!is.na(heartrate), !is.na(heatwave_try)) %>%
+  ggplot(aes(x = heatwave_try, y = heartrate, fill = country)) +
   geom_boxplot(outlier.alpha = 0.3) +
   theme_minimal(base_size = 13) +
   labs(
