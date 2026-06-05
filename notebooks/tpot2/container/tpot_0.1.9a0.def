@@ -1,0 +1,67 @@
+Bootstrap: docker
+From: condaforge/miniforge3:latest
+
+%labels
+    Author Alessandro Fuschi
+    Description TPOT2 container for heatwave machine learning analyses
+
+%post
+    export PIP_ROOT_USER_ACTION=ignore
+
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        curl \
+        ca-certificates \
+        libgomp1 \
+        && rm -rf /var/lib/apt/lists/*
+
+    mamba create -y -n tpot2env conda-forge::python=3.10
+
+    mamba install -y -n tpot2env \
+        conda-forge::numpy \
+        conda-forge::pandas \
+        conda-forge::scipy \
+        conda-forge::scikit-learn \
+        conda-forge::matplotlib \
+        conda-forge::joblib \
+        conda-forge::dask \
+        conda-forge::distributed \
+        conda-forge::dask-jobqueue \
+        conda-forge::xgboost \
+        conda-forge::lightgbm \
+        conda-forge::pyarrow \
+        conda-forge::openpyxl
+
+    /opt/conda/envs/tpot2env/bin/python -m pip install \
+        "setuptools<81" \
+        wheel
+
+    /opt/conda/envs/tpot2env/bin/python -m pip install \
+        "tpot2[sklearnex]"
+
+    /opt/conda/envs/tpot2env/bin/python -m pip install \
+        "setuptools<81"
+
+    mamba clean -afy
+
+%environment
+    export PATH=/opt/conda/envs/tpot2env/bin:$PATH
+    export PYTHONUNBUFFERED=1
+
+    export MPLCONFIGDIR=/tmp/matplotlib
+    export XDG_CACHE_HOME=/tmp/.cache
+    export FONTCONFIG_PATH=/opt/conda/envs/tpot2env/etc/fonts
+
+    export OMP_NUM_THREADS=1
+    export MKL_NUM_THREADS=1
+    export OPENBLAS_NUM_THREADS=1
+    export NUMEXPR_NUM_THREADS=1
+
+%runscript
+    exec /opt/conda/envs/tpot2env/bin/python "$@"
+
+%test
+    mkdir -p /tmp/matplotlib /tmp/.cache
+    /opt/conda/envs/tpot2env/bin/python -c "import setuptools; import pkg_resources; print('setuptools OK')"
+    /opt/conda/envs/tpot2env/bin/python -c "import tpot2, sklearn, pandas, dask, xgboost, lightgbm; print('TPOT2 container OK')"
