@@ -277,3 +277,22 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Ignore built Apptainer/Singularity images
+notebooks/tpot2/container/tpot_0.1.9a0.sif
