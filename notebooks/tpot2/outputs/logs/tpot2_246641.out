@@ -1,0 +1,3 @@
+Running on node: mtx30
+SLURM_JOB_NODELIST: mtx30
+SLURM_CPUS_PER_TASK: 64

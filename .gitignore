@@ -292,7 +292,8 @@ __marimo__/
 
 
 
-
+# TPOT2 checkpoints / large generated outputs
+notebooks/tpot2/outputs/checkpoints/
 
 # Ignore built Apptainer/Singularity images
 notebooks/tpot2/container/tpot_0.1.9a0.sif
