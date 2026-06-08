@@ -1,0 +1,440 @@
+---
+title: "Climate-health effects in TRIGGER wearable data"
+subtitle: "Exploratory within-user physiological deviations during thermal exposure"
+format: html
+editor: source
+---
+
+## Aim
+
+This notebook investigates whether daily environmental heat exposure is associated with short-term physiological deviations measured by wearable devices. Because wearable measurements are highly subject-specific, the main analysis focuses on **within-user z-scores**, i.e. daily deviations from each participant's own baseline.
+
+The notebook deliberately avoids a strict complete-case filter at the beginning. Missing physiological values are retained in the master table and removed only within each outcome-specific analysis.
+
+## 0. Setup
+
+```{r setup}
+library(tidyverse)
+library(lubridate)
+library(lmerTest)
+library(broom.mixed)
+
+source("../../R/load_functions.R")
+triggerR <- load_trigger_functions()
+rm(load_trigger_functions)
+
+out_dir <- "../../outputs/climate_health_effects"
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+
+city_levels <- c("Bologna", "Heraklion", "Augsburg", "Geneve")
+
+z_safe <- function(x) {
+  ok <- !is.na(x)
+
+  if (
+    sum(ok) < 2 ||
+    is.na(sd(x, na.rm = TRUE)) ||
+    sd(x, na.rm = TRUE) == 0
+  ) {
+    return(rep(NA_real_, length(x)))
+  }
+
+  as.numeric((x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))
+}
+
+safe_t_test_p <- function(x, g) {
+  keep <- !is.na(x) & !is.na(g)
+  x <- x[keep]
+  g <- g[keep]
+
+  if (length(unique(g)) < 2 || any(table(g) < 2)) {
+    return(NA_real_)
+  }
+
+  tryCatch(stats::t.test(x ~ g)$p.value, error = function(e) NA_real_)
+}
+```
+
+## 1. Load environmental exposure data
+
+```{r load-thermal}
+thermal_daily <- read_csv(
+  "../../data/environmental_indicators/processed/thermal_daily_2025.csv",
+  show_col_types = FALSE) |>
+  mutate(date = as.Date(date),
+         city = factor(city, levels = city_levels),
+         heatwave = posEHF | Euroheat)
+
+thermal_daily |>
+  summarise(
+    first_date = min(date, na.rm = TRUE),
+    last_date = max(date, na.rm = TRUE),
+    n_days = n_distinct(date),
+    n_cities = n_distinct(city),
+    n_heatwave_days = sum(heatwave, na.rm = TRUE)
+  ) |>
+  gt::gt()
+```
+
+## 2. Build daily wearable-exposure table
+
+The table is kept permissive: physiological `NA` values are retained after the wide transformation. This avoids losing a full user-day simply because one physiological measurement is missing.
+
+```{r build-wearable-daily}
+accounts <- triggerR$active_accounts() |>
+  mutate(userId = as.factor(userId))
+
+trigger_daily <- triggerR$read_trigger_tables(
+  granularity = "daily",
+  cores = 5,
+  min_obs_per_hour = 10
+)
+
+trigger_sleep <- triggerR$sleep_tidy()
+
+wearable_daily <- bind_rows(trigger_daily, trigger_sleep) |>
+  mutate(userId = as.factor(userId)) |>
+  left_join(accounts, by = "userId") |>
+  mutate(
+    city = case_when(
+      country == "IT" ~ "Bologna",
+      country == "GR" ~ "Heraklion",
+      country == "DE" ~ "Augsburg",
+      country == "CH" ~ "Geneve",
+      TRUE ~ NA_character_
+    ),
+    city = factor(city, levels = city_levels)
+  ) |>
+  filter(
+    source != "gps",
+    !is.na(value),
+    !(userId == 61 & date == as.Date("2025-07-30")),
+    source == "sleep" | n_hours_covered >= 16,
+    source == "sleep" | type %in% c("mean", "sum")
+  ) |>
+  select(userId, country, city, date, measurement, value) |>
+  distinct(userId, date, measurement, .keep_all = TRUE) |>
+  tidyr::pivot_wider(names_from = measurement, values_from = value) |>
+  left_join(thermal_daily, by = join_by(city, date)) |>
+  filter(!is.na(heatwave))
+
+wearable_daily |>
+  summarise(
+    n_user_days = n(),
+    n_users = n_distinct(userId),
+    n_cities = n_distinct(city),
+    n_heatwave_user_days = sum(heatwave, na.rm = TRUE),
+    heatwave_fraction = mean(heatwave, na.rm = TRUE)
+  ) |>
+  gt::gt() |>
+  gt::fmt_number(columns = heatwave_fraction, decimals = 3)
+```
+
+## 3. Exposure coverage and heatwave imbalance
+
+```{r exposure-summary}
+exposure_summary <- wearable_daily |>
+  summarise(
+    n_user_days = n(),
+    n_users = n_distinct(userId),
+    n_heatwave_days = sum(heatwave, na.rm = TRUE),
+    heatwave_fraction = mean(heatwave, na.rm = TRUE),
+    .by = city
+  ) |>
+  arrange(city)
+
+exposure_summary |>
+  gt::gt() |>
+  gt::fmt_number(columns = heatwave_fraction, decimals = 3)
+```
+
+```{r heat-calendar, fig.width=9, fig.height=4}
+p_heat_calendar <- thermal_daily |>
+  ggplot(aes(date, city, fill = utci_daily_mean)) +
+  geom_tile(height = 0.8) +
+  geom_point(
+    data = ~ filter(.x, heatwave),
+    aes(date, city),
+    inherit.aes = FALSE,
+    shape = 21,
+    size = 2.2,
+    stroke = 0.8,
+    fill = "white",
+    colour = "#00BFC4"
+  ) +
+  scale_fill_viridis_c(
+    option = "inferno",
+    name = "UTCI",
+    na.value = "grey90"
+  ) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Thermal exposure calendar",
+    subtitle = "Tile colour = daily mean UTCI; circles = heatwave days",
+    x = NULL,
+    y = NULL
+  )
+
+p_heat_calendar
+
+ggsave(
+  file.path(out_dir, "thermal_exposure_calendar.png"),
+  p_heat_calendar,
+  width = 9,
+  height = 4,
+  dpi = 300
+)
+```
+
+```{r heat-calendar-scatter, fig.width=9, fig.height=7}
+p_heat_calendar_scatter <- thermal_daily |>
+  ggplot(aes(x = date, y = t2m_daily_mean, colour = heatwave_type)) +
+  geom_point(size = 1) +
+  facet_wrap(~ city, ncol = 1, scales = "free_y") +
+  theme_minimal(base_size = 13) +
+  labs(
+    title = "Daily temperature and heatwave classification",
+    x = NULL,
+    y = "Daily mean temperature at 2 m",
+    colour = "Heatwave type"
+  )
+
+p_heat_calendar_scatter
+
+ggsave(
+  file.path(out_dir, "thermal_exposure_calendar_scatter.png"),
+  p_heat_calendar_scatter,
+  width = 9,
+  height = 7,
+  dpi = 300
+)
+```
+
+## 4. Physiological data availability
+
+```{r physiological-variables}
+phys_vars <- c(
+  "heartrate", "bphigh", "bplow", "bodytemp", "skintemp",
+  "steps", "cal", "sleepduration", "remsleep", "lightsleep",
+  "deepsleep", "awake", "sleepquality", "fallsleepefficiency"
+)
+
+phys_vars <- intersect(phys_vars, names(wearable_daily))
+phys_z_vars <- paste0(phys_vars, "_z")
+
+availability_by_variable <- purrr::map_dfr(phys_vars, \(var) {
+  wearable_daily |>
+    filter(!is.na(.data[[var]])) |>
+    summarise(
+      variable = var,
+      n_user_days = n(),
+      n_users = n_distinct(userId),
+      n_heatwave_days = sum(heatwave, na.rm = TRUE),
+      heatwave_fraction = mean(heatwave, na.rm = TRUE),
+      .groups = "drop"
+    )
+}) |>
+  arrange(desc(n_user_days))
+
+availability_by_variable |>
+  gt::gt() |>
+  gt::fmt_number(columns = heatwave_fraction, decimals = 3)
+```
+
+```{r availability-plot, fig.width=8, fig.height=5}
+p_availability <- availability_by_variable |>
+  mutate(variable = forcats::fct_reorder(variable, n_user_days)) |>
+  ggplot(aes(n_user_days, variable)) +
+  geom_col() +
+  geom_point(aes(x = n_heatwave_days), size = 5) +
+  geom_text(
+    aes(x = n_heatwave_days, label = n_heatwave_days),
+    colour = "white", size = 3) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Physiological measurement availability",
+    subtitle = "Bars = available user-days; labelled points = heatwave user-days",
+    x = "Number of user-days",
+    y = NULL
+  )
+
+p_availability
+
+ggsave(
+  file.path(out_dir, "physiological_measurement_availability.png"),
+  p_availability,
+  width = 8,
+  height = 5,
+  dpi = 300
+)
+```
+
+## 5. Within-user physiological deviations
+
+Each physiological variable is converted to a within-user z-score. A value of `1` means that the subject was one standard deviation above their own average on that day. This controls for stable between-subject differences and focuses on daily deviations from the participant's usual physiological baseline.
+
+```{r within-user-zscores}
+wearable_z <- wearable_daily |>
+  group_by(userId) |>
+  mutate(across(all_of(phys_vars), z_safe, .names = "{.col}_z")) |>
+  ungroup() |>
+  group_by(city) |>
+  mutate(
+    t2m_city_z = z_safe(t2m_daily_mean),
+    utci_city_z = z_safe(utci_daily_mean)
+  ) |>
+  ungroup() |>
+  mutate(month = floor_date(date, "month"))
+```
+
+## 6. Heatwave physiological fingerprint
+
+This analysis compares heatwave and non-heatwave days for each physiological variable using all available observations for that variable. Therefore, the number of observations may differ across outcomes.
+
+```{r heatwave-fingerprint-table, fig.width=12}
+within_user_effects <- map(phys_vars, \(v) {
+  z <- paste0(v, "_z")
+  wearable_z |>
+    filter(!is.na(.data[[z]]), !is.na(heatwave)) |>
+    summarise(
+      variable = v,
+      n_total = n(),
+      n_users = n_distinct(userId),
+      n_heatwave = sum(heatwave, na.rm = TRUE),
+      n_reference = sum(!heatwave, na.rm = TRUE),
+      mean_heatwave = mean(.data[[z]][heatwave], na.rm = TRUE),
+      mean_reference = mean(.data[[z]][!heatwave], na.rm = TRUE),
+      delta_z = mean_heatwave - mean_reference,
+      p_value = safe_t_test_p(.data[[z]], heatwave))
+  }) |>
+  
+  bind_rows() |>
+  
+  mutate(
+    direction = case_when(
+      delta_z > 0 ~ "Higher during heatwave",
+      delta_z < 0 ~ "Lower during heatwave",
+      TRUE ~ "No difference"),
+    significance = case_when(
+      p_value < 0.001 ~ "***",
+      p_value < 0.01 ~ "**",
+      p_value < 0.05 ~ "*",
+      p_value < 0.1 ~ ".",
+      TRUE ~ "")) |>
+  
+  arrange(desc(abs(delta_z)))
+
+within_user_effects |>
+  gt::gt() |>
+  gt::fmt_number(
+    columns = c(mean_heatwave, mean_reference, delta_z, p_value),
+    decimals = 3
+  )
+
+readr::write_csv(
+  within_user_effects,
+  file.path(out_dir, "heatwave_physiological_fingerprint.csv")
+)
+```
+
+```{r heatwave-fingerprint-plot, fig.width=8, fig.height=5}
+p_fingerprint <- within_user_effects |>
+  mutate(variable = forcats::fct_reorder(variable, delta_z)) |>
+  ggplot(aes(delta_z, variable)) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_point(aes(size = n_heatwave), alpha = 0.85) +
+  scale_size_continuous(
+    range = c(3, 7),
+    breaks = c(66, 100, 150, 209)
+  ) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Physiological heatwave fingerprint",
+    subtitle = "Mean within-user z-score difference: heatwave vs non-heatwave days",
+    x = "Difference in within-user z-score",
+    y = NULL,
+    size = "Heatwave\nuser-days"
+  )
+
+p_fingerprint
+
+ggsave(
+  file.path(out_dir, "physiological_heatwave_fingerprint.png"),
+  p_fingerprint,
+  width = 8,
+  height = 5,
+  dpi = 300
+)
+```
+
+## 7. Outcome-specific mixed-effect models
+
+After the fingerprint analysis, I used outcome-specific mixed models to better understand the observed differences. The fingerprint gives the overall heatwave vs non-heatwave contrast, but part of that contrast may actually be due to continuous thermal exposure, activity level or sleep duration.
+
+For each physiological outcome, the model includes the heatwave indicator together with UTCI, steps and sleep duration. This allows the heatwave coefficient to be interpreted as the residual association with heatwave days after considering these covariates. The other coefficients are also useful, because they indicate whether the physiological outcome is more directly related to temperature, movement or sleep.
+
+The random intercept for `userId` accounts for the repeated daily observations collected from the same participants.
+
+```{r fit-heatwave-model}
+fit_heatwave_lm <- function(data, outcome,
+                            adjust_activity = TRUE,
+                            adjust_sleep = TRUE) {
+  outcome_z <- paste0(outcome, "_z")
+  candidate_covars <- c("heatwave", "utci_city_z")
+
+  if (adjust_activity && "steps_z" %in% names(data) && outcome != "steps") {
+    candidate_covars <- c(candidate_covars, "steps_z")}
+
+  if (adjust_sleep && "sleepduration_z" %in% names(data) && outcome != "sleepduration") {
+    candidate_covars <- c(candidate_covars, "sleepduration_z")}
+
+  model_vars <- c(outcome_z, candidate_covars, "userId")
+
+  dat <- data |> select(all_of(model_vars)) |> drop_na()
+
+  if (nrow(dat) < 50 || length(unique(dat$userId)) < 3 || length(unique(dat$heatwave)) < 2) {
+    return(NULL)}
+
+  form <- as.formula(paste0(outcome_z, " ~ ", paste(candidate_covars, collapse = " + ")))
+  fit <- stats::lm(form, data = dat)
+  attr(fit, "model_formula") <- deparse(form)
+  attr(fit, "n_obs") <- nobs(fit)
+  
+  fit
+}
+```
+
+```{r mixed-model-results}
+main_outcomes <- intersect(
+  c("heartrate", "bodytemp", "skintemp", "bphigh", "bplow", "sleepduration", "deepsleep"),
+  phys_vars)
+
+model_fits_lm <- main_outcomes |>
+  setNames(main_outcomes) |>
+  purrr::map(\(outcome) fit_heatwave_lm(wearable_z, outcome))
+```
+
+Some mixed models may result in singular fits. This means that, after within-user standardization, the random intercept for `userId` explains little residual variance for those outcomes. The fixed-effect estimates are retained, but results from singular models should be interpreted more cautiously.
+
+```{r heatwave-model-table}
+model_results_lm <- imap_dfr(model_fits_lm, \(fit, outcome) {
+  broom::tidy(fit) |> dplyr::mutate(
+    outcome = outcome,
+    equation = attr(fit, "model_formula"),
+    n_obs = attr(fit, "n_obs"),
+    .before = 1)
+  })
+
+heatwave_model_results_lm <- model_results_lm |>
+  dplyr::filter(term == "heatwaveTRUE") |>
+  dplyr::arrange(p.value)
+```
+
+```{r}
+heatwave_model_results_lm |>
+  dplyr::select(outcome, equation, n_obs, estimate, std.error, statistic, p.value) |>
+  gt::gt() |>
+  gt::fmt_number(columns = c(estimate, std.error, statistic, p.value),
+                 decimals = 3)
+```
+
