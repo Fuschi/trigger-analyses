@@ -1,0 +1,187 @@
+---
+title: "Hourly wearable data example - Italy / Bologna"
+subtitle: "From long raw hourly data to an easier-to-use table"
+format: html
+editor: source
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+```
+
+# Aim of the notebook
+
+This notebook shows how to work with the hourly wearable dataset prepared for the Italian/Bologna participants.
+
+The input file contains wearable measurements aggregated at the **hourly level** and stored in a **long format**.  
+Each row corresponds mainly to a specific combination of:
+
+- participant (`userId`);
+- date;
+- hour;
+- wearable measurement (`measurement`);
+- summary statistic type (`type`);
+- aggregated value (`value`);
+- number of valid observations used to compute the aggregated value (`n_obs_valid`).
+
+These are the main variables needed to interpret the dataset, but they are not the only columns available in the table.
+
+In particular, `n_obs_valid` indicates how many valid observations were used to compute each hourly aggregated value.  
+Because it quantifies the amount of data supporting each aggregation, it is the main variable that can be used to filter the dataset and assess whether a given hourly measurement is reliable enough to be included in the analysis.
+
+In other words, `n_obs_valid` tells us how many underlying measurements contributed to the hourly `mean`, `min`, `max`, or `sum`.
+Most wearable measurements were aggregated using hourly `mean`, `min`, and `max`, while `sum` was used only for cumulative variables such as calories and steps.
+
+## Load Data
+
+```{r}
+wearable_long_italy_hourly <- read_tsv("data/wearable_long_table_raw.tsv.gz",
+                                       show_col_types = FALSE) %>%
+  mutate(userId = as.factor(userId),
+         date = as_date(date))
+```
+
+```{r}
+glimpse(wearable_long_italy_hourly)
+```
+
+```{r}
+wearable_long_italy_hourly %>%
+  summarise(
+    n_rows = n(),
+    n_subjects = n_distinct(userId),
+    first_date = min(date, na.rm = TRUE),
+    last_date = max(date, na.rm = TRUE)) %>%
+  gt::gt()
+```
+
+# Filter the long table
+
+In this step we create a simplified long-format table focused on the wearable variables that are more directly useful for physiological, activity-related, and environmental analyses.
+
+We apply three main filters.
+
+First, GPS data are excluded.  
+This choice was made because the aim of this example is to focus on physiological and wearable-derived variables rather than on movement trajectories or spatial information. GPS data can still be included in a separate analysis, but they may require specific preprocessing and filtering criteria, for example to account for location accuracy, duplicated positions, or irregular sampling.
+
+Second, we retain only `mean` and `sum` hourly aggregations.  
+At the hourly level, `mean` is used as the main summary statistic for most wearable measurements, while `sum` is retained for cumulative variables such as steps and calories. If needed, hourly `min` and `max` values can also be included to describe within-hour variability or to derive additional indicators, such as hourly ranges.
+
+Third, we keep only hourly aggregated values based on at least 10 valid observations.  
+This threshold is not intended as a fixed rule, but as a practical compromise for this example. The idea is to remove hourly values computed from too few observations, while retaining a reasonable amount of data for exploratory analyses.
+This choice should also be interpreted in light of the different sampling frequencies of the wearable devices. Some smartwatch-derived variables are sampled approximately every minute, while others may be recorded less frequently or with a less regular interval. For this reason, the threshold used here is only a working criterion and can be revised depending on the variable and on the desired level of reliability.
+
+The `n_obs_valid` threshold can be changed depending on the specific measurement, the expected sampling frequency of the device, and the level of reliability required for the analysis.
+
+```{r, warning=FALSE, fig.width=12, fig.height=4}
+wearable_long_italy_hourly %>%
+  ggplot(aes(x = n_records_total, fill = source)) +
+  geom_histogram(bins = 10) +
+  facet_wrap(~measurement, ncol = 7) +
+  theme_bw() +
+  coord_cartesian(xlim = c(0, 65)) +
+  theme(legend.position = "top") +
+  labs(x = "Total recorded events per subject-hour",
+       y = "Count",
+       fill = "Source")
+```
+
+```{r}
+long_filt <- wearable_long_italy_hourly %>%
+  filter(source != "gps") %>%
+  filter(type %in% c("mean", "sum")) %>%
+  select(
+    userId,
+    date,
+    hour,
+    n_records_total,
+    n_obs_valid,
+    measurement,
+    value
+  ) %>%
+  filter(n_obs_valid >= 10)
+```
+
+
+# Convert to complete wide hourly table
+
+The filtered table contains only the hours where at least one valid wearable measurement is available.
+
+For many analyses, however, it is useful to have a complete hourly table, including participant-hours with no wearable data at all.
+
+In this step, we create a complete grid of all combinations of participant, date, and hour, and then join the available wearable measurements in wide format.
+
+The resulting table contains one row for each participant-hour.  
+Hours without any valid wearable measurement are retained as rows with `NA` values across all measurement columns.
+
+```{r}
+wide <- long_filt %>%
+  distinct(userId) %>%
+  crossing(date = seq(min(long_filt$date, na.rm = TRUE),
+                      max(long_filt$date, na.rm = TRUE),
+                      by = "day"),
+           hour = 0:23) %>%
+  unite(col = "event", userId, date, hour, sep = "--", remove = FALSE) %>%
+  left_join(long_filt %>%
+              unite(col = "event", userId, date, hour, sep = "--", remove = FALSE) %>%
+      select(event, measurement, value) %>%
+      pivot_wider(names_from = measurement, values_from = value), by = "event")
+```
+
+```{r, fig.width=16, fig.height=6}
+wide %>%
+  arrange(userId, date, hour) %>%
+  select(-userId, -date, -hour) %>%
+  pivot_longer(-event, names_to = "measurements", values_to = "value") %>%
+  mutate(presence = !is.na(value)) %>%
+  ggplot(aes(x = event, y = measurements, fill = presence)) +
+  geom_tile(linewidth = 0) +
+  theme(legend.position = "top",
+        axis.text.x = element_blank()) +
+  scale_fill_manual(
+    values = c("FALSE" = "grey90", "TRUE" = "#2C7FB8"),
+    labels = c("FALSE" = "Missing", "TRUE" = "Available"),
+    name = NULL) 
+```
+
+**Figure. Availability of hourly aggregated wearable measurements for the Italian/Bologna participants.**  
+Columns represent participant-hour events, where each event is defined by the combination of participant identifier (`userId`), calendar date (`date`), and hour of the day (`hour`). Rows represent wearable measurements. Blue tiles indicate available aggregated values after filtering, whereas grey tiles indicate missing values.
+
+# Save the simplified wide table
+
+The resulting table contains one row per participant and hour.
+
+Rows with no available wearable measurements are kept in the table and contain `NA` values in the measurement columns.
+
+```{r}
+write_tsv(
+  wide,
+  "data/wearable_hourly_wide_italy_bologna.tsv.gz"
+)
+```
+
+# Notes 
+
+The final table is designed to be easier to use for integration with hourly environmental or climate variables.
+
+The key columns are:
+
+- `userId`: participant identifier;
+- `date`: calendar date;
+- `hour`: hour of the day;
+- `event`: compact participant-hour identifier;
+- wearable measurement columns: one column for each selected measurement.
+
+Only non-GPS wearable measurements are included.
+
+Only hourly `mean` and `sum` values are retained in this simplified table.  
+The `mean` aggregation is used for most wearable measurements, while `sum` is used for cumulative variables such as calories and steps.
+
+The filtering threshold `n_obs_valid >= 10` is applied before creating the final wide table.  
+This means that the final table contains only hourly values based on at least 10 valid underlying observations.
+
+Participant-hours with no reliable wearable measurements are still retained as rows, with `NA` values in the measurement columns.
+
+```{r}
+write_tsv(wide, "data/wearable_hourly_wide_italy_bologna.tsv.gz")
+```
