@@ -35,6 +35,7 @@ p_occ <- trigger_daily %>%
   filter(date >= as.Date("2025-03-01"),
          date <= Sys.Date()) %>%
   #filter(date >= as.Date("2025-03-01")) %>%
+  mutate(userId = as.factor(userId)) %>%
   left_join(accounts, "userId") %>%
   arrange(country, userId, date) %>%
   mutate(userId = factor(userId, levels = unique(userId))) %>%
