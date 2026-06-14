@@ -83,8 +83,8 @@ p_volume <- df_quality %>%
   ggplot(aes(x = measurement, y = total_obs_valid, fill = source)) +
   geom_col() + coord_flip() +
   labs(x = NULL, y = "Total valid observations",
-       title = "Measurement coverage",
-       subtitle = "Total number of valid observations available for each measurement") +
+       title = "Available data volume by measurement",
+       subtitle = "Total number of valid hourly observations retained after quality filtering") +
   theme_minimal(base_size = 14) +
   theme(
     plot.title = element_text(face = "bold", size = 16),
@@ -101,7 +101,7 @@ p_completness_panel <- ggpubr::ggarrange(p_quality, p_volume, common.legend = T,
 p_completness_panel
 ```
 
-```{r, fig.width=14, fig.height=6}
+```{r, fig.width=10, fig.height=10, warning=FALSE}
 p_hourly_valid_density <- trigger_hourly %>%
   filter(!is.na(userId), type %in% c("sum", "mean")) %>%
   filter(date >= as.Date("2025-03-01"), date <= Sys.Date()) %>%
@@ -113,12 +113,12 @@ p_hourly_valid_density <- trigger_hourly %>%
   ggplot(aes(x = n_obs_valid, color = source, fill = source)) +
   geom_density(linewidth = 0.8) +
   geom_vline(xintercept = c(12, 60), linetype = "dashed", color = "black", linewidth = 0.6) +
-  facet_wrap(~ measurement, scales = "free", nrow = 4) +
+  facet_wrap(~ measurement, scales = "free", nrow = 7) +
   labs(
     x = "Valid observations per hour",
     y = NULL,
-    title = "Distribution of hourly valid observations",
-    subtitle = "Dashed lines indicate reference thresholds: 12 (~5-minutes) and 60 (~1-minutes)"
+    title = "Sampling frequency by measurement",
+    subtitle = "Hourly valid observations, with dashed lines at ~5-min and ~1-min sampling frequencies"
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -129,12 +129,26 @@ p_hourly_valid_density <- trigger_hourly %>%
     panel.grid.major.y = element_blank(),
     panel.grid.minor = element_blank(),
     strip.text = element_text(face = "bold")
-  ) 
+  ) +
+  xlim(0,70)
 
 p_hourly_valid_density
 ```
 
+```{r, fig.width=15, fig.height=7}
+p_spacer <- ggplot() + theme_void()
+pall <- ggpubr::ggarrange(p_hourly_valid_density, 
+                  p_spacer,
+                  p_volume,
+                  common.legend = T, nrow = 1, widths = c(7, 1, 7))
+pall
+```
+
+
 ```{r}
+ggsave("../../outputs/measurments_completness/plot_slide.png",
+       plot = pall, width = 15, height = 7, dpi = 300)
+
 ggsave("../../outputs/measurments_completness/measurments_completeness.png", 
        plot = p_completness_panel, width = 14, height = 6, dpi = 300)
 

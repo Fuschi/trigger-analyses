@@ -27,7 +27,7 @@ trigger_daily <- if (!exists("trigger_daily")) {
 
 ## GPS, SMH, SML, AIR
 
-```{r, fig.width=12, fig.height=12}
+```{r, fig.width=15, fig.height=8}
 p_occ <- trigger_daily %>%
   select(source, userId, date, n_records_total) %>%
   distinct() %>%
@@ -48,6 +48,7 @@ p_occ <- trigger_daily %>%
                        name   = "n (log10)") +
   theme(legend.position = "bottom",
         axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
         panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
         legend.text = element_text(size = 12, angle = 45, hjust = 1, vjust = 1)) +
@@ -67,7 +68,7 @@ p_occ
 
 ```{r}
 png(filename = "../../outputs/sampling_frequency/HF_sampling_freq_user_heatmap.png",
-    width = 12*300, height = 12*300, res = 300)
+    width = 15*300, height = 8*300, res = 300)
 p_occ
 dev.off()
 ```

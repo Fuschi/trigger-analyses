@@ -349,8 +349,8 @@ gt_coef
 ```{r}
 gtsave(
   gt_coef,
-  filename = "../../outputs/physiology_environment_association/heartrate_model_coefficients.png"
-)
+  filename = "../../outputs/physiology_environment_association/heartrate_model_coefficients.png",
+   zoom = 3, expand = 10)
 ```
 
 
