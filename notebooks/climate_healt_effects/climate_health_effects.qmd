@@ -43,7 +43,19 @@ trigger_hourly <- if (!exists("trigger_hourly")) {
     filter(date >= "2025-04-01", date <= "2026-05-14")
   
 } else trigger_hourly
-trigger_hourly
+
+trigger_daily <- if (!exists("trigger_daily")) {
+  
+  triggerR$read_trigger_tables(granularity = "daily", cores = 5,
+                               min_obs_per_hour = 10) %>%
+    mutate(userId = as.factor(userId)) %>%
+    filter(!(userId == 61 & date == "2025-07-30")) %>%
+    left_join(accounts, by = "userId") %>%
+    relocate(nationality, .after = userId) %>%
+    select(-deviceId, -firmware) %>%
+    filter(date >= "2025-04-01", date <= "2026-05-14")
+  
+} else trigger_daily
 ```
 
 ```{r}
@@ -135,54 +147,715 @@ wearable %>%
 ```
 
 ```{r}
-climate_vars <- c("utci_c", "temperature", "humidity", "uvb", "light")
-
-physio_vars <- c(
-  "heartrate", "breathrate", "oxygens", "sleeprate",
-  "steps", "cal", "bphigh", "bplow", "bodytemp", "skintemp"
-)
-
-pairwise_availability <- expand_grid(
-  climate = climate_vars,
-  outcome = physio_vars) %>%
-  rowwise() %>%
-  mutate(n_complete = sum(!is.na(wearable[[climate]]) & 
-                            !is.na(wearable[[outcome]])),
-         n_users = n_distinct(wearable$userId[!is.na(wearable[[climate]]) & 
-                                                !is.na(wearable[[outcome]])]),
-         pct_complete = 100 * n_complete / nrow(wearable)) %>%
-  ungroup() %>%
-  arrange(desc(n_complete)) %>%
-  mutate(label = paste0(scales::comma(n_complete),"\n", n_users, " users"),
-    climate = factor(climate, levels = climate_vars),
-    outcome = factor(outcome, levels = rev(physio_vars)))
+library(tidyverse)     # core: dplyr, ggplot2, tidyr, readr, forcats, lubridate
+library(janitor)       # clean_names(), tabyl()
+library(skimr)         # skim() — fast descriptive statistics
+library(naniar)        # missing value visualisation
+library(ggridges)      # ridge / joy plots
+library(patchwork)     # multi-panel composition
+library(lme4)          # mixed models (lmer)
+library(lmerTest)      # p-values for lmer (Satterthwaite)
+library(broom.mixed)   # tidy() for lmer objects
+library(ggeffects)     # marginal effects from lmer
+library(correlation)   # within-group correlations (easystats)
+library(scales)        # ggplot2 axis formatting
 ```
 
-```{r, fig.width=8, fig.height=7}
-ggplot(pairwise_availability, aes(x = climate, y = outcome, fill = n_complete)) +
-  geom_tile(color = "white", linewidth = 0.4) +
-  geom_text(aes(label = label), size = 3) +
-  scale_fill_viridis_c(
-    option = "C",
-    trans = "sqrt",
-    labels = scales::comma
+```{r}
+df <- wearable %>%
+  clean_names() |>
+  mutate(
+    date   = ymd(date),
+    month  = floor_date(date, "month"),
+    season = case_when(
+      month(date) %in% c(12, 1, 2)  ~ "Winter",
+      month(date) %in% c(3, 4, 5)   ~ "Spring",
+      month(date) %in% c(6, 7, 8)   ~ "Summer",
+      month(date) %in% c(9, 10, 11) ~ "Autumn"
+    ) |> factor(levels = c("Winter", "Spring", "Summer", "Autumn")),
+    # UTCI stress class as ordered factor
+    utci_stress_class = factor(utci_stress_class, levels = c(
+      "Very strong cold stress", "Strong cold stress",
+      "Moderate cold stress",   "Slight cold stress",
+      "No thermal stress",
+      "Moderate heat stress",   "Strong heat stress",
+      "Very strong heat stress"
+    )),
+    # short labels for plots
+    utci_class_short = fct_recode(utci_stress_class,
+      "V.strong cold" = "Very strong cold stress",
+      "Strong cold"   = "Strong cold stress",
+      "Moderate cold" = "Moderate cold stress",
+      "Slight cold"   = "Slight cold stress",
+      "No stress"     = "No thermal stress",
+      "Moderate heat" = "Moderate heat stress",
+      "Strong heat"   = "Strong heat stress",
+      "V.strong heat" = "Very strong heat stress"
+    ),
+    # hour as circular variable
+    hour_sin = sin(2 * pi * hour / 24),
+    hour_cos = cos(2 * pi * hour / 24),
+    user_id  = factor(user_id)
+  )
+
+glimpse(df)
+```
+
+## 2. Descriptive statistics
+
+### 2.1 Quick overview with `skimr`
+
+```{r skim}
+df |>
+  select(utci_c, heartrate, breathrate, bphigh, bplow,
+         bodytemp, skintemp, oxygens, steps, cal) |>
+  skim()
+```
+
+### 2.2 Missing values
+
+```{r missing-summary}
+df |>
+  select(
+    heartrate, oxygens, breathrate, sleeprate, bphigh, bplow,
+    bodytemp, skintemp, steps, cal,
+    temperature, humidity, pm25, sound
+  ) |>
+  miss_var_summary() |>
+  mutate(
+    pct_miss = as.numeric(pct_miss),
+    variable = fct_reorder(variable, pct_miss),
+    label = paste0(round(pct_miss, 1), "%")
+  ) |>
+  ggplot(aes(pct_miss, variable)) +
+  geom_col(aes(fill = pct_miss), show.legend = FALSE) +
+  geom_text(
+    aes(label = label),
+    hjust = -0.1,
+    size = 3,
+    colour = "grey40"
   ) +
+  scale_fill_gradient(low = "#93c5fd", high = "#dc2626") +
+  scale_x_continuous(
+    labels = label_percent(scale = 1),
+    expand = expansion(mult = c(0, 0.08))
+  ) +
+  coord_cartesian(xlim = c(0, 100), clip = "off") +
   labs(
-    x = "Climate / environmental variable",
-    y = "Physiological outcome",
-    fill = "Complete\nobservations",
-    title = "Availability of complete climate–physiology pairs",
-    subtitle = "Each tile shows complete hourly observations and contributing users"
+    title = "Percentage of missing values by variable",
+    x = NULL,
+    y = NULL
   ) +
-  theme_minimal() +
+  theme_minimal(base_size = 12) +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid = element_blank()
+    panel.grid.major.y = element_blank(),
+    plot.margin = margin(5.5, 25, 5.5, 5.5)
+  )
+```
+
+```{r missing-upset, fig.height=5}
+# Co-occurrence pattern of missing values
+df |>
+  select(heartrate, breathrate, bphigh, bplow,
+         bodytemp, skintemp, oxygens, steps) |>
+  gg_miss_upset(nsets = 8)
+```
+
+### 2.3 UTCI distribution by city
+
+```{r utci-city}
+city_palette <- c(
+  "Augsburg"  = "#3b82f6",
+  "Bologna"   = "#f97316",
+  "Geneve"    = "#10b981",
+  "Heraklion" = "#ef4444"
+)
+
+ggplot(df, aes(x = utci_c, y = city, fill = city)) +
+  geom_density_ridges(alpha = 0.75, scale = 1.2, colour = "white") +
+  scale_fill_manual(values = city_palette, guide = "none") +
+  labs(
+    title    = "UTCI distribution by city",
+    subtitle = "Heraklion warmest, Geneva coldest",
+    x = "UTCI (°C)", y = NULL
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+### 2.4 Thermal stress classes — frequencies
+
+```{r utci-classes}
+df |>
+  count(utci_class_short) |>
+  mutate(pct = n / sum(n)) |>
+  ggplot(aes(utci_class_short, pct)) +
+  geom_col(aes(fill = as.integer(utci_class_short)), show.legend = FALSE) +
+  geom_text(aes(label = paste0(round(pct * 100, 2), "%")),
+            vjust = -0.4, size = 3) +
+  scale_fill_gradient2(low = "#1d4ed8", mid = "#22c55e", high = "#dc2626",
+                       midpoint = 4.5) +
+  scale_y_continuous(labels = label_percent()) +
+  labs(title = "Distribution of UTCI thermal stress classes",
+       x = NULL, y = "% observations") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1))
+```
+
+---
+
+## 3. Heart rate × UTCI
+
+### 3.1 Mean by class
+
+```{r hr-by-class}
+# Colour palette: cold blues → neutral green → heat reds (matching report)
+bar_colours <- c(
+  "V.strong cold" = "#1d4ed8",
+  "Strong cold"   = "#3b82f6",
+  "Moderate cold" = "#93c5fd",
+  "Slight cold"   = "#bfdbfe",
+  "No stress"     = "#fde68a",
+  "Moderate heat" = "#fbbf24",
+  "Strong heat"   = "#f97316",
+  "V.strong heat" = "#ef4444"
+)
+
+hr_class <- df |>
+  group_by(utci_class_short) |>
+  summarise(
+    mean_hr = mean(heartrate, na.rm = TRUE),
+    sd_hr   = sd(heartrate,   na.rm = TRUE),
+    n       = sum(!is.na(heartrate)),
+    se      = sd_hr / sqrt(n),
+    .groups = "drop"
+  )
+
+ggplot(hr_class, aes(utci_class_short, mean_hr, fill = utci_class_short)) +
+  geom_col(width = 0.72, show.legend = FALSE) +
+  geom_errorbar(
+    aes(ymin = mean_hr - se, ymax = mean_hr + se),
+    width = 0.22,
+    colour = "grey40",
+    linewidth = 0.5
+  ) +
+  geom_text(
+    aes(label = round(mean_hr, 1), y = mean_hr + se + 0.8),
+    size = 3.2,
+    fontface = "bold",
+    colour = "grey20"
+  ) +
+  scale_fill_manual(values = bar_colours) +
+  scale_y_continuous(
+    breaks = seq(60, 90, 10),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  coord_cartesian(ylim = c(60, 92)) +
+  labs(
+    title    = "Mean heart rate by UTCI thermal stress class",
+    subtitle = "Error bars = ±1 SE · n = 189,329 observations with valid HR",
+    x = NULL,
+    y = "HR (bpm)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1, colour = "grey40", size = 10),
+    axis.text.y = element_text(colour = "grey40"),
+    axis.title.y = element_text(colour = "grey40", size = 10),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey90", linewidth = 0.4),
+    plot.title = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50", size = 10)
+  )
+```
+
+## 4. Blood pressure — U-shaped curve
+
+```{r}
+library(tidyverse)
+library(scales)
+
+utci_levels <- c(
+  "V.strong cold", "Strong cold", "Moderate cold", "Slight cold",
+  "No stress",
+  "Moderate heat", "Strong heat", "V.strong heat"
+)
+
+bp_class <- df |>
+  mutate(
+    utci_class_short = factor(utci_class_short, levels = utci_levels)
+  ) |>
+  group_by(utci_class_short) |>
+  summarise(
+    Systolic  = mean(bphigh, na.rm = TRUE),
+    Diastolic = mean(bplow,  na.rm = TRUE),
+    n_systolic  = sum(!is.na(bphigh)),
+    n_diastolic = sum(!is.na(bplow)),
+    .groups = "drop"
+  ) |>
+  mutate(x = as.numeric(utci_class_short)) |>
+  pivot_longer(
+    c(Systolic, Diastolic),
+    names_to = "measure",
+    values_to = "mmhg"
+  ) |>
+  mutate(
+    n = if_else(measure == "Systolic", n_systolic, n_diastolic)
   )
 ```
 
 ```{r}
-pollution_vars <- c("pm1", "pm25", "pm10", "pc03", "pc05", "pc1", "pc25",
-                    "pc5", "pc10")
+format_p <- function(p) {
+  case_when(
+    is.na(p) ~ NA_character_,
+    p == 0 | p < 2.2e-16 ~ "p < 2.2e-16",
+    TRUE ~ paste0("p = ", formatC(p, format = "e", digits = 2))
+  )
+}
+
+bp_test <- function(data, bp_var, measure_label) {
+  
+  neutral <- data |>
+    filter(utci_stress_class == "No thermal stress") |>
+    pull({{ bp_var }}) |>
+    na.omit()
+  
+  cold_extreme <- data |>
+    filter(
+      utci_stress_class %in% c(
+        "Strong cold stress",
+        "Very strong cold stress"
+      )
+    ) |>
+    pull({{ bp_var }}) |>
+    na.omit()
+  
+  heat_extreme <- data |>
+    filter(
+      utci_stress_class %in% c(
+        "Strong heat stress",
+        "Very strong heat stress"
+      )
+    ) |>
+    pull({{ bp_var }}) |>
+    na.omit()
+  
+  w_cold <- wilcox.test(cold_extreme, neutral, exact = FALSE)
+  w_heat <- wilcox.test(heat_extreme, neutral, exact = FALSE)
+  
+  group_mean <- c(
+    mean(cold_extreme, na.rm = TRUE),
+    mean(heat_extreme, na.rm = TRUE)
+  )
+  
+  neutral_mean <- mean(neutral, na.rm = TRUE)
+  
+  tibble(
+    measure = measure_label,
+    comparison_type = c("cold", "heat"),
+    comparison = c(
+      "strong/very strong cold vs neutral",
+      "strong/very strong heat vs neutral"
+    ),
+    mean_group = group_mean,
+    mean_neutral = neutral_mean,
+    delta = group_mean - neutral_mean,
+    p_value = c(w_cold$p.value, w_heat$p.value),
+    p_label = format_p(p_value),
+    n_group = c(length(cold_extreme), length(heat_extreme)),
+    n_neutral = length(neutral)
+  )
+}
+
+bp_tests <- bind_rows(
+  bp_test(df, bphigh, "Systolic"),
+  bp_test(df, bplow,  "Diastolic")
+) |>
+  mutate(
+    across(c(mean_group, mean_neutral, delta), ~ round(.x, 1))
+  )
 ```
 
+```{r}
+neutral_lines <- bp_tests |>
+  group_by(measure) |>
+  summarise(
+    mean_neutral = first(mean_neutral),
+    .groups = "drop"
+  )
+
+caption_text <- bp_tests |>
+  mutate(
+    delta_label = paste0(if_else(delta >= 0, "+", ""), delta, " mmHg"),
+    comparison_label = recode(
+      comparison_type,
+      cold = "Cold extremes",
+      heat = "Heat extremes"
+    ),
+    text = paste0(
+      measure, ": Δ ", delta_label, ", ", p_label
+    )
+  ) |>
+  group_by(comparison_label) |>
+  summarise(
+    text = paste(text, collapse = " · "),
+    .groups = "drop"
+  ) |>
+  mutate(
+    text = paste0(comparison_label, " — ", text)
+  ) |>
+  pull(text) |>
+  paste(collapse = "\n")
+
+label_df <- bp_class |>
+  filter(
+    utci_class_short %in% c(
+      "V.strong cold",
+      "Strong cold",
+      "No stress",
+      "Strong heat",
+      "V.strong heat"
+    )
+  ) |>
+  mutate(
+    label = round(mmhg, 1),
+    y_label = case_when(
+      measure == "Systolic"  ~ mmhg + 1.0,
+      measure == "Diastolic" ~ mmhg - 1.1
+    )
+  )
+
+pbp <- ggplot(bp_class, aes(x = x, y = mmhg)) +
+  annotate(
+    "rect",
+    xmin = 0.5, xmax = 2.5,
+    ymin = -Inf, ymax = Inf,
+    fill = "#dbeafe",
+    alpha = 0.45
+  ) +
+  annotate(
+    "rect",
+    xmin = 4.5, xmax = 5.5,
+    ymin = -Inf, ymax = Inf,
+    fill = "#fef3c7",
+    alpha = 0.55
+  ) +
+  annotate(
+    "rect",
+    xmin = 6.5, xmax = 8.5,
+    ymin = -Inf, ymax = Inf,
+    fill = "#fee2e2",
+    alpha = 0.45
+  ) +
+  geom_hline(
+    data = neutral_lines,
+    aes(yintercept = mean_neutral, colour = measure),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    linewidth = 0.45,
+    alpha = 0.55,
+    show.legend = FALSE
+  ) +
+  geom_line(
+    aes(colour = measure, group = measure, linewidth = measure),
+    lineend = "round"
+  ) +
+  geom_point(
+    aes(fill = measure),
+    shape = 21,
+    size = 3.8,
+    colour = "white",
+    stroke = 0.9
+  ) +
+  geom_text(
+    data = label_df,
+    aes(
+      y = y_label,
+      label = label,
+      colour = measure
+    ),
+    size = 3,
+    fontface = "bold",
+    show.legend = FALSE
+  ) +
+  scale_x_continuous(
+    breaks = seq_along(utci_levels),
+    labels = utci_levels,
+    expand = expansion(mult = c(0.03, 0.03))
+  ) +
+  scale_y_continuous(
+    breaks = pretty_breaks(n = 6),
+    expand = expansion(mult = c(0.08, 0.08))
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Systolic" = "#ef4444",
+      "Diastolic" = "#3b82f6"
+    )
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Systolic" = "#ef4444",
+      "Diastolic" = "#3b82f6"
+    )
+  ) +
+  scale_linewidth_manual(
+    values = c(
+      "Systolic" = 1.35,
+      "Diastolic" = 1.05
+    )
+  ) +
+  labs(
+    title = "Blood pressure is higher at thermal extremes",
+    subtitle = "Mean systolic and diastolic blood pressure by UTCI class. Dashed lines indicate neutral-condition means.",
+    caption = caption_text,
+    x = NULL,
+    y = "Blood pressure (mmHg)",
+    colour = NULL,
+    fill = NULL,
+    linewidth = NULL
+  ) +
+  guides(
+    linewidth = "none",
+    colour = guide_legend(
+      override.aes = list(linewidth = 1.4, size = 3)
+    )
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    legend.text = element_text(size = 10, colour = "grey35"),
+    axis.text.x = element_text(angle = 35, hjust = 1, colour = "grey35", size = 10),
+    axis.text.y = element_text(colour = "grey45"),
+    axis.title.y = element_text(colour = "grey35", size = 10),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey90", linewidth = 0.35),
+    plot.title = element_text(face = "bold", size = 14, colour = "grey15"),
+    plot.subtitle = element_text(size = 10.2, colour = "grey45"),
+    plot.caption = element_text(
+      size = 8.6,
+      colour = "grey45",
+      hjust = 0,
+      lineheight = 1.05,
+      margin = margin(t = 8)
+    )
+  )
+```
+
+```{r, fig.width=8, fig.height=6}
+pbp
+```
+
+
+
+## 7. Physical activity — inverted-J curve
+
+```{r steps-j}
+library(tidyverse)
+library(scales)
+
+utci_levels <- c(
+  "V.strong cold", "Strong cold", "Moderate cold", "Slight cold",
+  "No stress",
+  "Moderate heat", "Strong heat", "V.strong heat"
+)
+
+utci_colours <- c(
+  "V.strong cold" = "#1d4ed8",
+  "Strong cold"   = "#3b82f6",
+  "Moderate cold" = "#93c5fd",
+  "Slight cold"   = "#bfdbfe",
+  "No stress"     = "#fde68a",
+  "Moderate heat" = "#fbbf24",
+  "Strong heat"   = "#f97316",
+  "V.strong heat" = "#ef4444"
+)
+
+steps_class <- df |>
+  mutate(
+    utci_class_short = factor(utci_class_short, levels = utci_levels)
+  ) |>
+  group_by(utci_class_short) |>
+  summarise(
+    mean_steps = mean(steps, na.rm = TRUE),
+    sd_steps   = sd(steps, na.rm = TRUE),
+    n          = sum(!is.na(steps)),
+    se_steps   = sd_steps / sqrt(n),
+    .groups    = "drop"
+  )
+
+neutral_steps <- steps_class |>
+  filter(utci_class_short == "No stress") |>
+  pull(mean_steps)
+
+steps_class <- steps_class |>
+  mutate(
+    pct_neutral = mean_steps / neutral_steps,
+    label_pct = paste0(round(pct_neutral * 100), "%"),
+    label_steps = number(mean_steps, accuracy = 1)
+  )
+
+ggplot(steps_class, aes(x = utci_class_short, y = mean_steps)) +
+  annotate(
+    "rect",
+    xmin = 0.5, xmax = 2.5,
+    ymin = -Inf, ymax = Inf,
+    fill = "#dbeafe",
+    alpha = 0.35
+  ) +
+  annotate(
+    "rect",
+    xmin = 4.5, xmax = 5.5,
+    ymin = -Inf, ymax = Inf,
+    fill = "#fef3c7",
+    alpha = 0.55
+  ) +
+  annotate(
+    "rect",
+    xmin = 6.5, xmax = 8.5,
+    ymin = -Inf, ymax = Inf,
+    fill = "#fee2e2",
+    alpha = 0.35
+  ) +
+  geom_hline(
+    yintercept = neutral_steps,
+    linetype = "dashed",
+    linewidth = 0.45,
+    colour = "grey45",
+    alpha = 0.65
+  ) +
+  geom_col(
+    aes(fill = utci_class_short),
+    width = 0.68,
+    alpha = 0.88,
+    show.legend = FALSE
+  ) +
+  geom_errorbar(
+    aes(ymin = mean_steps - se_steps, ymax = mean_steps + se_steps),
+    width = 0.18,
+    linewidth = 0.45,
+    colour = "grey35"
+  ) +
+  geom_line(
+    aes(group = 1),
+    linewidth = 0.85,
+    colour = "grey25",
+    alpha = 0.65
+  ) +
+  geom_point(
+    size = 2.8,
+    shape = 21,
+    fill = "white",
+    colour = "grey20",
+    stroke = 0.8
+  ) +
+  geom_text(
+    aes(
+      label = label_pct,
+      y = mean_steps + se_steps + max(mean_steps, na.rm = TRUE) * 0.045
+    ),
+    size = 3.2,
+    fontface = "bold",
+    colour = "grey25"
+  ) +
+  scale_fill_manual(values = utci_colours) +
+  scale_y_continuous(
+    labels = number_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.14))
+  ) +
+  labs(
+    title = "Physical activity decreases under thermal stress",
+    subtitle = "Mean hourly steps by UTCI class. Labels show percentage relative to neutral conditions.",
+    x = NULL,
+    y = "Steps per hour",
+    caption = "Error bars represent ±1 SE. Dashed line indicates the mean value under neutral thermal conditions."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1, colour = "grey35", size = 10),
+    axis.text.y = element_text(colour = "grey45"),
+    axis.title.y = element_text(colour = "grey35", size = 10),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey90", linewidth = 0.35),
+    plot.title = element_text(face = "bold", size = 14, colour = "grey15"),
+    plot.subtitle = element_text(size = 10.2, colour = "grey45"),
+    plot.caption = element_text(size = 8.8, colour = "grey45", hjust = 0),
+    plot.margin = margin(8, 12, 8, 8)
+  )
+```
+
+---
+
+## 8. Circadian rhythm of HR
+
+```{r circadian}
+hr_hour <- df |>
+  group_by(hour) |>
+  summarise(
+    hr_mean = mean(heartrate, na.rm = TRUE),
+    hr_se   = sd(heartrate, na.rm = TRUE) / sqrt(sum(!is.na(heartrate))),
+    .groups = "drop"
+  )
+
+ggplot(hr_hour, aes(hour, hr_mean)) +
+  geom_ribbon(aes(ymin = hr_mean - hr_se, ymax = hr_mean + hr_se),
+              fill = "#3b82f6", alpha = 0.2) +
+  geom_line(colour = "#3b82f6", linewidth = 1.2) +
+  geom_point(colour = "#1d4ed8", size = 2) +
+  scale_x_continuous(breaks = seq(0, 23, 3),
+                     labels = paste0(seq(0, 23, 3), ":00")) +
+  labs(
+    title    = "Circadian rhythm of heart rate",
+    subtitle = "Nadir ~04:00 (60 bpm) · daytime plateau ~81 bpm · averaged across all users",
+    x = "Hour of day", y = "HR (bpm)"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+---
+
+## 9. Summary table
+
+```{r summary-table}
+class_summary <- df |>
+  group_by(utci_class_short) |>
+  summarise(
+    n_obs      = n(),
+    utci_mean  = mean(utci_c,     na.rm = TRUE),
+    hr         = mean(heartrate,  na.rm = TRUE),
+    systolic   = mean(bphigh,     na.rm = TRUE),
+    diastolic  = mean(bplow,      na.rm = TRUE),
+    steps_h    = mean(steps,      na.rm = TRUE),
+    breathrate = mean(breathrate, na.rm = TRUE),
+    skintemp   = mean(skintemp,   na.rm = TRUE),
+    .groups    = "drop"
+  ) |>
+  mutate(across(where(is.numeric), ~ round(.x, 1)))
+
+knitr::kable(
+  class_summary,
+  col.names = c("UTCI class", "N obs", "UTCI °C", "HR bpm",
+                "Systolic mmHg", "Diastolic mmHg",
+                "Steps/h", "Breath rate", "Skin temp °C"),
+  caption   = "Mean physiological values by UTCI thermal stress class"
+)
+```
+
+---
+
+## 10. Methodological notes
+
+**Missing values** — physiological variables are missing from 28% (HR) to 92% (sleeprate). Each analysis uses the available subset for that variable; there is no complete-case dataset. Results for extreme classes (very strong cold/heat) are based on small n (~76–796 obs) and should be interpreted cautiously.
+
+**Circadian confounding** — UTCI is higher during the day, when HR is naturally elevated. The mixed model (section 4) controls for this via `hour_sin`/`hour_cos`. The by-class analyses (sections 3 and 6) do not explicitly control for time of day.
+
+**Outdoor UTCI vs actual exposure** — UTCI values come from a weather station, not the wearable. Users spending time indoors in air-conditioned spaces are not actually exposed to the recorded UTCI.
+
+**Interpreting lmer coefficients** — the UTCI_C coefficient (~0.14 bpm/°C) is the mean within-user effect, adjusted for hour and city. The raw between-class effect (section 3) is larger because it absorbs seasonal and geographic differences.
+
+```{r session}
+sessionInfo()
+```
