@@ -1,3 +1,85 @@
+repair_bp_pair <- function(high, low) {
+  high_new <- high
+  low_new <- low
+  
+  both_present <- !is.na(high) & !is.na(low)
+  
+  high_new[both_present] <- pmax(high[both_present], low[both_present])
+  low_new[both_present] <- pmin(high[both_present], low[both_present])
+  
+  list(high = high_new, low = low_new)
+}
+
+
+repair_blood_pressure_columns <- function(x) {
+  bp_value_suffixes <- c("sum", "min", "max", "mean")
+  bp_count_suffixes <- c("valid_n", "hours_n")
+  
+  if (all(c("bphigh_mean", "bplow_mean") %in% names(x))) {
+    bp_high_ref <- x[["bphigh_mean"]]
+    bp_low_ref <- x[["bplow_mean"]]
+  } else if (all(c("bphigh", "bplow") %in% names(x))) {
+    bp_high_ref <- x[["bphigh"]]
+    bp_low_ref <- x[["bplow"]]
+  } else {
+    return(x)
+  }
+  
+  bp_pair_complete <- !is.na(bp_high_ref) & !is.na(bp_low_ref)
+  bp_swapped <- bp_pair_complete & bp_high_ref < bp_low_ref
+  
+  x$bp_order_status <- dplyr::case_when(
+    !bp_pair_complete ~ "missing_pair",
+    bp_swapped ~ "repaired_swapped",
+    TRUE ~ "already_ordered"
+  )
+  
+  x$bp_order_repaired <- bp_swapped
+  
+  # Repair raw bphigh/bplow columns, if present
+  if (all(c("bphigh", "bplow") %in% names(x))) {
+    repaired <- repair_bp_pair(x[["bphigh"]], x[["bplow"]])
+    x[["bphigh"]] <- repaired$high
+    x[["bplow"]] <- repaired$low
+  }
+  
+  # Repair aggregated value columns: bphigh_mean/bplow_mean, min, max, sum
+  for (suffix in bp_value_suffixes) {
+    high_col <- paste0("bphigh_", suffix)
+    low_col <- paste0("bplow_", suffix)
+    
+    if (all(c(high_col, low_col) %in% names(x))) {
+      repaired <- repair_bp_pair(x[[high_col]], x[[low_col]])
+      x[[high_col]] <- repaired$high
+      x[[low_col]] <- repaired$low
+    }
+  }
+  
+  # Swap count columns only where the row-level BP order was clearly swapped
+  for (suffix in bp_count_suffixes) {
+    high_col <- paste0("bphigh_", suffix)
+    low_col <- paste0("bplow_", suffix)
+    
+    if (all(c(high_col, low_col) %in% names(x))) {
+      high_old <- x[[high_col]]
+      low_old <- x[[low_col]]
+      
+      x[[high_col]][bp_swapped] <- low_old[bp_swapped]
+      x[[low_col]][bp_swapped] <- high_old[bp_swapped]
+    }
+  }
+  
+  x
+}
+
+postprocess_trigger_table <- function(x, tbl, repair_bp = TRUE) {
+  if (isTRUE(repair_bp) && tbl == "smartwatchlow") {
+    return(repair_blood_pressure_columns(x))
+  }
+  
+  x
+}
+
 #' Read Trigger tables through a common interface
 #'
 #' Read one or more supported Trigger tables at the selected granularity.
@@ -141,6 +223,7 @@ read_trigger_tables <- function(con = NULL,
                                 min_obs_per_hour = 0,
                                 output = c("long", "list"),
                                 cores = 1,
+                                repair_bp = TRUE,
                                 connection = list(
                                   host = "127.0.0.1",
                                   port = 3336L,
@@ -248,6 +331,8 @@ read_trigger_tables <- function(con = NULL,
           min_obs_per_hour = min_obs_per_hour,
           con = con_worker
         )
+        
+        x <- postprocess_trigger_table(x, tbl = tbl, repair_bp = repair_bp)
 
         if (output == "long") {
           reshape_one_trigger_table(x, tbl = tbl, granularity = granularity)
@@ -271,12 +356,19 @@ read_trigger_tables <- function(con = NULL,
 
     for (tbl in tables) {
       if (verbose) message("Reading `", tbl, "`")
+      
       out[[tbl]] <- read_one_trigger_table(
         tbl = tbl,
         requested_readers = requested_readers,
         granularity = granularity,
         min_obs_per_hour = min_obs_per_hour,
         con = con
+      )
+      
+      out[[tbl]] <- postprocess_trigger_table(
+        out[[tbl]],
+        tbl = tbl,
+        repair_bp = repair_bp
       )
     }
   }

@@ -175,7 +175,7 @@ pca_particle_mass <- prcomp(log1p(trigger_hourly$data[, particle_mass_vars]),
 pca_particle_small <- prcomp(log1p(trigger_hourly$data[, particle_small_vars]),
                              center = TRUE, scale. = TRUE)
 
-pca_particle_all_log <- prcomp(log1p(trigger_hourly$data_log[, particle_vars]),
+pca_particle_all_log <- prcomp(trigger_hourly$data_log[, particle_vars],
                              center = TRUE, scale. = TRUE)
 
 tibble(
@@ -310,8 +310,27 @@ library(gtsummary)
 gt_coef <- broom.mixed::tidy(model_heartrate_global_log, effects = "fixed") %>%
   filter(
     term != "(Intercept)",
-    !stringr::str_detect(term, "^hour")) %>%
+    !stringr::str_detect(term, "^hour")
+  ) %>%
   mutate(
+    term_label = case_when(
+      term == "particle" ~ "Particle PC1 (log1p PM/PC)",
+      term == "activity" ~ "Activity PC1 (log1p cal/steps)",
+      term == "light" ~ "Light (log1p)",
+      term == "uvb" ~ "UVB (log1p)",
+      term == "temperature" ~ "Temperature",
+      term == "humidity" ~ "Humidity",
+      term == "pressure" ~ "Pressure",
+      term == "sound" ~ "Sound",
+      term == "breathrate" ~ "Breath rate",
+      term == "bphigh" ~ "Systolic blood pressure",
+      term == "bplow" ~ "Diastolic blood pressure",
+      term == "bodytemp" ~ "Body temperature",
+      term == "skintemp" ~ "Skin temperature",
+      stringr::str_detect(term, "^nationality") ~ 
+        stringr::str_replace(term, "^nationality", "Nationality: "),
+      TRUE ~ term
+    ),
     abs_estimate = abs(estimate),
     p_value = gtsummary::style_pvalue(p.value, digits = 3),
     significance = case_when(
@@ -323,14 +342,14 @@ gt_coef <- broom.mixed::tidy(model_heartrate_global_log, effects = "fixed") %>%
     )
   ) %>%
   arrange(desc(abs_estimate)) %>%
-  select(term, estimate, std.error, significance) %>%
+  select(term_label, estimate, std.error, significance) %>%
   gt() %>%
   fmt_number(
     columns = c(estimate, std.error),
     decimals = 3
   ) %>%
   cols_label(
-    term = "Predictor",
+    term_label = "Predictor",
     estimate = html("&beta;"),
     std.error = "SE",
     significance = "Significance"
@@ -340,17 +359,35 @@ gt_coef <- broom.mixed::tidy(model_heartrate_global_log, effects = "fixed") %>%
     subtitle = "Continuous predictors were scaled before model fitting"
   ) %>%
   tab_source_note(
-    source_note = "β values refer to one-standard-deviation increase in each continuous predictor."
+    source_note = "β values refer to one-standard-deviation increase in each continuous predictor. Variables marked as log1p were log-transformed before scaling."
   )
 
 gt_coef
 ```
 
 ```{r}
+gt_coef_compact <- gt_coef %>%
+  cols_width(
+    term_label ~ px(220),
+    estimate ~ px(70),
+    std.error ~ px(70),
+    significance ~ px(80)
+  ) %>%
+  tab_options(
+    table.width = px(460),
+    data_row.padding = px(1),
+    column_labels.padding = px(2),
+    heading.padding = px(3),
+    source_notes.padding = px(2),
+    table.font.size = px(12)
+  )
+
 gtsave(
-  gt_coef,
+  gt_coef_compact,
   filename = "../../outputs/physiology_environment_association/heartrate_model_coefficients.png",
-   zoom = 3, expand = 10)
+  zoom = 3,
+  expand = 0
+)
 ```
 
 
