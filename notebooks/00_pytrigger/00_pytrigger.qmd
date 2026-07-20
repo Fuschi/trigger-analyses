@@ -1,0 +1,148 @@
+---
+title: "pytrigger exploration"
+engine: knitr
+---
+
+## Environment
+
+The notebook uses `reticulate` to run Python and R in the same document.  
+This first check confirms which Python environment is active.
+
+```{r}
+library(reticulate)
+
+py_config()
+```
+
+## Setup
+
+Load the required Python libraries and create dedicated folders for the data
+and outputs produced by this notebook.
+
+```{python}
+import ssl
+import sys
+from pathlib import Path
+
+import pandas as pd
+from trigger import TriggerDB
+
+NOTEBOOK_ID = "00_pytrigger"
+
+DATA_DIR = Path("data") / NOTEBOOK_ID
+OUTPUT_DIR = Path("outputs") / NOTEBOOK_ID
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+print(f"Python: {sys.executable}")
+print(f"OpenSSL: {ssl.OPENSSL_VERSION}")
+print(f"Working directory: {Path.cwd()}")
+print(f"Data directory: {DATA_DIR.resolve()}")
+print(f"Output directory: {OUTPUT_DIR.resolve()}")
+```
+
+## Available tables
+
+Connect to the TRIGGER API and list the tables currently available through
+`pytrigger`.
+
+```{python}
+with TriggerDB() as db:
+    tables = db.tables()
+
+print(f"Number of available tables: {len(tables)}")
+
+tables
+```
+
+## Available columns
+
+Inspect the columns exposed for a selected table before building a query.
+
+```{python}
+with TriggerDB() as db:
+    myair_hourly_columns = db.columns("myair_hourly")
+
+myair_hourly_columns
+```
+
+## Select data
+
+`select()` retrieves a filtered subset of a table.  
+Here, the first 1,000 observations for user 187 are ordered by timestamp.
+
+```{python}
+with TriggerDB() as db:
+    myair_tidy_get = pd.DataFrame(
+        db.select(
+            table="myair_tidy",
+            columns=[
+                "userId",
+                "event_ts",
+                "pm25",
+                "temperature",
+                "humidity",
+            ],
+            where={
+                "userId": "=187",
+            },
+            order_by="event_ts",
+            order="ASC",
+            limit=1000,
+        )
+    )
+
+myair_tidy_r = {
+    column: myair_tidy_get[column].astype(object).tolist()
+    for column in myair_tidy_get.columns
+}
+
+print(f"Shape: {myair_tidy_get.shape}")
+
+myair_tidy_get.head()
+```
+
+## Plot data in R
+
+The selected columns are converted to simple Python lists so that `reticulate`
+can transfer them safely to R.
+
+```{r}
+library(tidyverse)
+
+py$myair_tidy_r %>%
+  as_tibble() %>%
+  mutate(
+    userId = as.character(userId),
+    event_ts = as.POSIXct(event_ts)
+  ) %>%
+  ggplot(aes(x = event_ts, y = pm25)) +
+  geom_point() +
+  labs(
+    title = "PM2.5 over time",
+    x = NULL,
+    y = "PM2.5"
+  ) +
+  theme_minimal()
+```
+
+## Download complete table
+
+`download()` retrieves the complete compressed dump and saves it in the data
+folder associated with this notebook.
+
+```{python}
+dump_file = DATA_DIR / "myair_tidy.csv.gz"
+
+with TriggerDB() as db:
+    myair_tidy_dump = db.download(
+        table="myair_tidy",
+        outfile=dump_file,
+    )
+
+print(f"Shape: {myair_tidy_dump.shape}")
+print(f"File: {dump_file.resolve()}")
+
+myair_tidy_dump.head()
+```
