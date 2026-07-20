@@ -7,8 +7,9 @@ data/*
 !data/.gitkeep
 
 # Generated analysis outputs
-outputs/*
-!outputs/.gitkeep
+data/*
+!data/README.md
+!data/download_data.qmd
 
 # Local Python environment
 .venv/
