@@ -1,0 +1,6 @@
+trigger @ git+https://github.com/Nico-Curti/pytrigger.git@164e89adf8ad041400d214f7544c596b588da665
+pandas
+pyarrow
+requests
+jupyter
+ipykernel
