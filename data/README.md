@@ -13,7 +13,7 @@ data/
 └── daily/
 ```
 
-`download_data.qmd` downloads all tables ending in:
+`download_data.py` downloads all tables ending in:
 
 - `_tidy`
 - `_5min`

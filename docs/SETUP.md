@@ -1,58 +1,42 @@
 # Setup
 
-## 1. Create the Python virtual environment
+## Python environment
 
 From the project root:
 
-``` bash
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## 2. Register the Jupyter kernel
+## R packages
 
-With `.venv` active:
+Install the packages used by the current notebooks:
 
-``` bash
-python -m ipykernel install       --user       --name trigger-analyses       --display-name "Python (trigger-analyses)"
+```r
+install.packages(c("reticulate", "tidyverse", "quarto"))
 ```
 
-The Quarto notebooks select this environment with:
+## Connect RStudio to the project Python
 
-``` yaml
-jupyter: trigger-analyses
-```
+Copy the environment example:
 
-You can verify the registered kernels with:
-
-``` bash
-jupyter kernelspec list
-```
-
-## 3. Optional: use the same Python from RStudio and reticulate
-
-This is required only for notebooks that mix R and Python chunks through `knitr` and `reticulate`.
-
-Copy the example file:
-
-``` bash
+```bash
 cp .Renviron.example .Renviron
 ```
 
-Then replace the placeholder with the absolute path to the project Python:
+Set the absolute path to the virtual environment:
 
-``` text
+```text
 RETICULATE_PYTHON=/absolute/path/to/trigger-analyses/.venv/bin/python
 ```
 
-Restart RStudio after creating or editing `.Renviron`.
+Restart RStudio, open `trigger-analyses.Rproj`, and verify the configuration:
 
-`.Renviron` is ignored by Git because the path is specific to each computer.
+```r
+reticulate::py_config()
+```
 
-## 4. Render the example notebook
-
-Open `notebooks/00_pytrigger.qmd` in RStudio and use **Render**.
-
-The notebook uses the Jupyter kernel named `trigger-analyses`, which points to `.venv/bin/python`.
+`.Renviron` and `.venv/` are local files and are not tracked by Git.

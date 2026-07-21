@@ -1,26 +1,28 @@
 # Rendering notebooks
 
-The project renders notebooks in both HTML and GitHub Markdown.
+Analysis notebooks are rendered in both HTML and GitHub Markdown.
 
-Run HTML first and GFM second:
+From the R console, render HTML first and GFM second:
 
 ```r
 quarto::quarto_render(output_format = "html")
 quarto::quarto_render(output_format = "gfm")
 ```
 
-Do not use:
+Do not use `output_format = "all"`: the self-contained HTML render may remove
+the figure directory required by the Markdown output.
 
-```r
-quarto::quarto_render(output_format = "all")
-```
-
-because the HTML render may delete the `*_files` directory containing the figures required by the Markdown output.
-
-Notebook sources are selected in `_quarto.yml` with:
+Project-wide rendering includes only:
 
 ```yaml
 project:
   render:
     - notebooks/*/*.qmd
+```
+
+`data/download_data.py` is excluded from the Quarto rendering workflow.
+Run it manually from the project root with:
+
+```bash
+python data/download_data.py
 ```

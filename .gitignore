@@ -2,14 +2,10 @@
 #                    Project-specific ignored files                       #
 #-------------------------------------------------------------------------#
 
-# Downloaded and locally generated data
-data/*
-!data/.gitkeep
-
-# Generated analysis outputs
+# Downloaded data and local download logs
 data/*
 !data/README.md
-!data/download_data.qmd
+!data/download_data.py
 
 # Local Python environment
 .venv/
@@ -55,9 +51,7 @@ __pycache__/
 #-------------------------------------------------------------------------#
 
 .quarto/
-
-# Rendered HTML, Markdown and their figure folders are intentionally
-# not ignored, so they can be published on GitHub.
-
-/.quarto/
 **/*.quarto_ipynb
+
+# Rendered analysis HTML, Markdown and figure directories are intentionally
+# tracked so that notebook results can be viewed directly on GitHub.
