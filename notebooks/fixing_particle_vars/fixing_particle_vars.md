@@ -1,0 +1,178 @@
+# Particle measurements quality control
+Alessandro Fuschi
+
+## Setup
+
+``` r
+library(tidyverse)
+
+cfg <- list(
+  notebook_id = "fixing_particle_vars",
+  data_dir = file.path("data", "5min"),
+  output_dir = file.path("outputs", "fixing_particle_vars"),
+  timezone = "UTC"
+)
+
+dir.create(cfg$output_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+## Data import
+
+The five-minute MyAir table is imported using `userId` and `bucket_5min`
+as the analytical key.
+
+Rows belonging to duplicated analytical keys are removed completely,
+because their origin cannot be resolved unambiguously at this stage.
+
+``` r
+read_5min <- \(filename) {
+  read_csv(
+    file.path(cfg$data_dir, filename),
+    na = c("", "NA", "NULL"),
+    locale = locale(tz = cfg$timezone),
+    col_types = cols(
+      userId = col_character(),
+      bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
+    ),
+    show_col_types = FALSE
+  ) %>%
+    add_count(userId, bucket_5min, name = "key_n") %>%
+    filter(key_n == 1) %>%
+    select(-key_n)
+}
+```
+
+``` r
+air <- read_5min("myair_5min.csv.gz")
+
+rm(read_5min)
+```
+
+## Variable selection
+
+Mean particulate-mass and particle-count measurements are retained for
+each five-minute interval.
+
+Temperature and humidity minima and maxima are also retained for
+subsequent calculation of within-bucket variability.
+
+``` r
+air <- air %>%
+  transmute(
+    userId,
+    bucket_5min,
+
+    temperature = temperature_mean,
+    temperature_min,
+    temperature_max,
+
+    humidity = humidity_mean,
+    humidity_min,
+    humidity_max,
+
+    pm1 = pm1_mean,
+    pm25 = pm25_mean,
+    pm10 = pm10_mean,
+
+    pc03 = pc03_mean,
+    pc05 = pc05_mean,
+    pc1 = pc1_mean,
+    pc25 = pc25_mean,
+    pc5 = pc5_mean,
+    pc10 = pc10_mean,
+
+    uvb = uvb_mean,
+    light = light_mean
+  )
+```
+
+## Particle measurements quality control
+
+Particle-count variables represent cumulative counts above increasing
+particle-size thresholds. They are therefore expected to follow the
+monotonic relation:
+
+$$\mathrm{PC}_{0.3} \geq
+\mathrm{PC}_{0.5} \geq
+\mathrm{PC}_{1.0} \geq
+\mathrm{PC}_{2.5} \geq
+\mathrm{PC}_{5.0} \geq
+\mathrm{PC}_{10}$$
+
+A five-minute particle block is classified as invalid when:
+
+- the cumulative particle-count ordering is violated;
+- at least one particulate-mass value exceeds 1,000 µg/m³.
+
+Because particulate-mass and particle-count variables originate from the
+same sensor block, all PM and PC measurements are set to missing when
+either condition is detected.
+
+``` r
+air <- air %>%
+  mutate(
+    invalid_particle_order = coalesce(
+      pc03 < pc05 |
+        pc05 < pc1 |
+        pc1 < pc25 |
+        pc25 < pc5 |
+        pc5 < pc10,
+      FALSE
+    ),
+
+    invalid_particle_mass = coalesce(
+      pm1 > 1000 |
+        pm25 > 1000 |
+        pm10 > 1000,
+      FALSE
+    ),
+
+    invalid_particles =
+      invalid_particle_order |
+      invalid_particle_mass,
+
+    pm1 = if_else(invalid_particles, NA_real_, pm1),
+    pm25 = if_else(invalid_particles, NA_real_, pm25),
+    pm10 = if_else(invalid_particles, NA_real_, pm10),
+
+    pc03 = if_else(invalid_particles, NA_real_, pc03),
+    pc05 = if_else(invalid_particles, NA_real_, pc05),
+    pc1 = if_else(invalid_particles, NA_real_, pc1),
+    pc25 = if_else(invalid_particles, NA_real_, pc25),
+    pc5 = if_else(invalid_particles, NA_real_, pc5),
+    pc10 = if_else(invalid_particles, NA_real_, pc10)
+  )
+```
+
+## Quality-control summary
+
+``` r
+air %>%
+  count(
+    invalid_particle_order,
+    invalid_particle_mass,
+    invalid_particles
+  ) %>%
+  mutate(percent = 100 * n / sum(n)) %>%
+  knitr::kable(
+    format = "pipe",
+    digits = 2,
+    col.names = c(
+      "Invalid count ordering",
+      "Invalid particulate mass",
+      "Invalid particle block",
+      "Observations",
+      "Percent"
+    ),
+    caption = "Particle quality-control classification"
+  )
+```
+
+| Invalid count ordering | Invalid particulate mass | Invalid particle block | Observations | Percent |
+|:---|:---|:---|---:|---:|
+| FALSE | FALSE | FALSE | 1122211 | 99.90 |
+| FALSE | TRUE | TRUE | 487 | 0.04 |
+| TRUE | FALSE | TRUE | 456 | 0.04 |
+| TRUE | TRUE | TRUE | 135 | 0.01 |
+
+Particle quality-control classification

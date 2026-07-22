@@ -1,0 +1,279 @@
+---
+title: "Exploratory exposure-response hexplots"
+author: "Alessandro Fuschi"
+editor: source
+---
+
+## Setup
+
+```{r, message=FALSE}
+library(tidyverse)
+
+cfg <- list(
+  notebook_id = "exploratory_hexplots",
+  data_dir = file.path("data", "5min"),
+  output_dir = file.path("outputs", "exploratory_hexplots"),
+  timezone = "UTC",
+  hex_bins = 120
+)
+
+dir.create(cfg$output_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+## Data import
+
+The five-minute tables are read using `userId` and `bucket_5min` as analytical keys.
+
+Rows associated with duplicated analytical keys are removed completely.
+
+```{r, message=FALSE}
+read_5min <- \(filename) {
+  read_csv(
+    file.path(cfg$data_dir, filename),
+    na = c("", "NA", "NULL"),
+    locale = locale(tz = cfg$timezone),
+    col_types = cols(
+      userId = col_character(),
+      bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
+    ),
+    show_col_types = FALSE
+  ) %>%
+    add_count(userId, bucket_5min, name = "key_n") %>%
+    filter(key_n == 1) %>%
+    select(-key_n)
+}
+```
+
+```{r, message=FALSE}
+air <- read_5min("myair_5min.csv.gz")
+swh <- read_5min("smartwatchhigh_5min.csv.gz")
+swl <- read_5min("smartwatchlow_5min.csv.gz")
+
+rm(read_5min)
+```
+
+## Dataset construction
+
+```{r}
+dat <- full_join(
+  air %>%
+    transmute(
+      userId,
+      bucket_5min,
+      temperature = temperature_mean,
+      temperature_min,
+      temperature_max,
+      humidity = humidity_mean,
+      humidity_min,
+      humidity_max,
+      pm1 = pm1_mean,
+      pm25 = pm25_mean,
+      pm10 = pm10_mean,
+      pc03 = pc03_mean,
+      pc05 = pc05_mean,
+      pc1 = pc1_mean,
+      pc25 = pc25_mean,
+      pc5 = pc5_mean,
+      pc10 = pc10_mean,
+      uvb = uvb_mean,
+      light = light_mean
+    ),
+  swh %>%
+    transmute(
+      userId,
+      bucket_5min,
+      heartrate = heartrate_mean,
+      heartrate_min,
+      heartrate_max,
+      breathrate = breathrate_mean,
+      breathrate_min,
+      breathrate_max,
+      oxygen = oxygens_mean,
+      oxygen_min = oxygens_min,
+      oxygen_max = oxygens_max
+    ),
+  by = c("userId", "bucket_5min"),
+  relationship = "one-to-one"
+) %>%
+  full_join(
+    swl %>%
+      transmute(
+        userId,
+        bucket_5min,
+        steps = step_mean,
+        bphigh = bphigh_mean,
+        bplow = bplow_mean,
+        bodytemp = bodytemp_mean,
+        bodytemp_min,
+        bodytemp_max,
+        skintemp = skintemp_mean,
+        skintemp_min,
+        skintemp_max
+      ),
+    by = c("userId", "bucket_5min"),
+    relationship = "one-to-one"
+  ) %>%
+  arrange(userId, bucket_5min) %>%
+  mutate(userId = factor(userId))
+```
+
+## Derived variables
+
+```{r}
+dat <- dat %>%
+  mutate(
+    humidex = ThermIndex::humidex(
+      temp = temperature,
+      ur = humidity
+    ),
+    heartrate_range = heartrate_max - heartrate_min,
+    breathrate_range = breathrate_max - breathrate_min,
+    oxygen_range = oxygen_max - oxygen_min,
+    bodytemp_range = bodytemp_max - bodytemp_min,
+    skintemp_range = skintemp_max - skintemp_min,
+    pulse_pressure = bphigh - bplow,
+    mean_arterial_pressure = (bphigh + 2 * bplow) / 3
+  )
+```
+
+## Within-subject centering
+
+Physiological variables are expressed as deviations from each subject's personal mean.
+
+```{r}
+dat <- dat %>%
+  group_by(userId) %>%
+  mutate(
+    heartrate_c =
+      heartrate - mean(heartrate, na.rm = TRUE),
+
+    heartrate_range_c =
+      heartrate_range - mean(heartrate_range, na.rm = TRUE),
+
+    breathrate_c =
+      breathrate - mean(breathrate, na.rm = TRUE),
+
+    oxygen_min_c =
+      oxygen_min - mean(oxygen_min, na.rm = TRUE),
+
+    skintemp_c =
+      skintemp - mean(skintemp, na.rm = TRUE),
+
+    pulse_pressure_c =
+      pulse_pressure - mean(pulse_pressure, na.rm = TRUE),
+
+    mean_arterial_pressure_c =
+      mean_arterial_pressure -
+      mean(mean_arterial_pressure, na.rm = TRUE)
+  ) %>%
+  ungroup()
+```
+
+## Candidate exposure-response pairs
+
+The plots involving particulate matter are provisional until particle quality control is incorporated into the ETL procedure.
+
+```{r}
+pairs <- tribble(
+  ~exposure,     ~response,                  ~x_scale,
+  "steps",       "heartrate_c",              "identity",
+  "temperature", "heartrate_c",              "identity",
+  "humidex",     "heartrate_c",              "identity",
+  "humidex",     "heartrate_range_c",        "identity",
+  "temperature", "skintemp_c",               "identity",
+  "humidex",     "skintemp_c",               "identity",
+  "humidex",     "breathrate_c",             "identity",
+  "humidex",     "pulse_pressure_c",         "identity",
+  "humidex",     "mean_arterial_pressure_c", "identity",
+  "pm25",        "breathrate_c",             "log1p",
+  "pm25",        "oxygen_min_c",             "log1p",
+  "pm25",        "heartrate_c",              "log1p",
+  "uvb",         "heartrate_c",              "log1p",
+  "light",       "skintemp_c",               "log1p"
+)
+```
+
+## Variable labels
+
+```{r}
+variable_labels <- c(
+  steps = "Steps in five minutes",
+  temperature = "Temperature (°C)",
+  humidex = "Humidex",
+  pm25 = "PM2.5 (µg/m³)",
+  uvb = "UVB",
+  light = "Light",
+
+  heartrate_c = "Heart rate relative to personal mean (bpm)",
+  heartrate_range_c = "Heart-rate range relative to personal mean (bpm)",
+  breathrate_c = "Breathing rate relative to personal mean",
+  oxygen_min_c = "Minimum oxygen saturation relative to personal mean",
+  skintemp_c = "Skin temperature relative to personal mean (°C)",
+  pulse_pressure_c = "Pulse pressure relative to personal mean (mmHg)",
+  mean_arterial_pressure_c =
+    "Mean arterial pressure relative to personal mean (mmHg)"
+)
+```
+
+## Hexplot function
+
+The axes retain their original units unless a `log1p` transformation is explicitly specified. The number of observations within each hexagonal bin is displayed on a logarithmic colour scale.
+
+```{r}
+make_hexplot <- \(exposure, response, x_scale) {
+  plot_dat <- dat %>%
+    filter(
+      !is.na(.data[[exposure]]),
+      !is.na(.data[[response]])
+    )
+
+  p <- plot_dat %>%
+    ggplot(aes(
+      x = .data[[exposure]],
+      y = .data[[response]]
+    )) +
+    geom_hex(bins = cfg$hex_bins) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    scale_fill_distiller(
+      palette = "Spectral",
+      direction = -1,
+      transform = "log10",
+      breaks = c(1, 10, 100, 1000, 10000, 100000),
+      labels = scales::label_number(
+        big.mark = ".",
+        decimal.mark = ","
+      ),
+      name = "Observations\n(log10 scale)"
+    ) +
+    labs(
+      title = paste(
+        variable_labels[[exposure]],
+        "and",
+        variable_labels[[response]]
+      ),
+      subtitle = "Five-minute observations",
+      x = variable_labels[[exposure]],
+      y = variable_labels[[response]]
+    ) +
+    theme_minimal()
+
+  if (x_scale == "log1p") {
+    p <- p +
+      scale_x_continuous(transform = "log1p")
+  }
+
+  p
+}
+```
+
+
+## Exposure-response hexplots
+
+```{r, fig.width=10, fig.height=6.5}
+hex_plots <- pmap(
+  pairs,
+  make_hexplot
+)
+
+walk(hex_plots, print)
+```

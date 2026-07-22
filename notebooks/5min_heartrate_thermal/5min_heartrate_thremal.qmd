@@ -1,0 +1,502 @@
+---
+title: "Five-minute heart rate and thermal exposure"
+author: "Alessandro Fuschi"
+editor: source
+---
+
+## Setup
+
+```{r, message=FALSE}
+library(tidyverse)
+
+cfg <- list(
+  notebook_id = "5min_heart_rate_environment",
+  data_dir = file.path("data", "5min"),
+  output_dir = file.path("outputs", "5min_heart_rate_environment"),
+  timezone = "UTC"
+)
+
+dir.create(cfg$output_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+## Data import
+
+The five-minute tables are read using `userId` and `bucket_5min` as analytical keys.
+
+If an analytical key occurs more than once within the same table, all corresponding rows are removed because the duplicate records cannot be resolved unambiguously at this stage.
+
+```{r, message=FALSE}
+read_5min <- \(filename) {
+  read_csv(
+    file.path(cfg$data_dir, filename),
+    na = c("", "NA", "NULL"),
+    locale = locale(tz = cfg$timezone),
+    col_types = cols(
+      userId = col_character(),
+      bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
+    ),
+    show_col_types = FALSE
+  ) %>%
+    add_count(userId, bucket_5min, name = "key_n") %>%
+    filter(key_n == 1) %>%
+    select(-key_n)
+}
+```
+
+```{r, message=FALSE}
+air <- read_5min("myair_5min.csv.gz")
+swh <- read_5min("smartwatchhigh_5min.csv.gz")
+swl <- read_5min("smartwatchlow_5min.csv.gz")
+
+rm(read_5min)
+```
+
+## Heart-rate dataset
+
+The analytical dataset is anchored to the heart-rate table. Activity and environmental measurements are added when available for the same subject and five-minute interval.
+
+`step_mean` is used instead of `step_sum`, because the same step measurement is repeated across the raw observations within each bucket.
+
+```{r}
+hr_dat <- swh %>%
+  transmute(
+    userId,
+    bucket_5min,
+    heartrate = heartrate_mean,
+    heartrate_min,
+    heartrate_max
+  ) %>%
+  left_join(
+    swl %>%
+      transmute(
+        userId,
+        bucket_5min,
+        steps = step_mean
+      ),
+    by = c("userId", "bucket_5min"),
+    relationship = "one-to-one"
+  ) %>%
+  left_join(
+    air %>%
+      transmute(
+        userId,
+        bucket_5min,
+        temperature = temperature_mean,
+        humidity = humidity_mean
+      ),
+    by = c("userId", "bucket_5min"),
+    relationship = "one-to-one"
+  ) %>%
+  arrange(userId, bucket_5min) %>%
+  mutate(userId = factor(userId))
+```
+
+The original tables are no longer required.
+
+```{r}
+rm(air, swh, swl)
+```
+
+## Derived variables
+
+Humidex is calculated from temperature and relative humidity. Heart-rate range represents the difference between the maximum and minimum heart rate recorded within each five-minute interval.
+
+```{r}
+hr_dat <- hr_dat %>%
+  mutate(
+    humidex = ThermIndex::humidex(
+      temp = temperature,
+      ur = humidity
+    ),
+    heartrate_range = heartrate_max - heartrate_min
+  )
+```
+
+## Within-subject heart rate
+
+Heart rate is centered around each subject's personal mean.
+
+This transformation removes between-subject differences in average heart rate while preserving the original unit of measurement.
+
+```{r}
+hr_dat <- hr_dat %>%
+  group_by(userId) %>%
+  mutate(
+    heartrate_personal_mean = mean(heartrate, na.rm = TRUE),
+    heartrate_c = heartrate - heartrate_personal_mean
+  ) %>%
+  ungroup()
+```
+
+Positive values of `heartrate_c` indicate a heart rate above the subject's personal mean. Negative values indicate a heart rate below the personal mean.
+
+## Data coverage
+
+```{r}
+hr_dat %>%
+  summarise(
+    observations = n(),
+    subjects = n_distinct(userId),
+    heart_rate_observations = sum(!is.na(heartrate)),
+    heart_rate_with_steps = sum(!is.na(heartrate) & !is.na(steps)),
+    heart_rate_with_humidex = sum(!is.na(heartrate) & !is.na(humidex))
+  ) %>%
+  knitr::kable(
+    format = "pipe",
+    col.names = c(
+      "Rows",
+      "Subjects",
+      "Heart rate",
+      "Heart rate and steps",
+      "Heart rate and Humidex"
+    ),
+    caption = "Heart-rate dataset coverage"
+  )
+```
+
+# Physical activity and heart rate
+
+## Joint distribution
+
+```{r, fig.width=10, fig.height=6.5}
+hr_dat %>%
+  filter(!is.na(steps), !is.na(heartrate_c)) %>%
+  ggplot(aes(x = steps, y = heartrate_c)) +
+  geom_hex(bins = 120) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral",
+    direction = -1,
+    transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(
+      big.mark = ".",
+      decimal.mark = ","
+    ),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Physical activity and heart rate",
+    subtitle = "Heart rate centered within subject",
+    x = "Steps in five minutes",
+    y = "Heart rate relative to personal mean (bpm)"
+  ) +
+  theme_minimal()
+```
+
+## Heart rate by step interval
+
+Step counts are grouped into intervals of ten steps. For each interval, the number of observations, number of subjects, mean centered heart rate and interquartile range are calculated.
+
+```{r}
+hr_steps_summary <- hr_dat %>%
+  filter(!is.na(steps), !is.na(heartrate_c)) %>%
+  mutate(steps_bin = floor(steps / 10) * 10) %>%
+  group_by(steps_bin) %>%
+  summarise(
+    observations = n(),
+    subjects = n_distinct(userId),
+    mean_heartrate_c = mean(heartrate_c),
+    q25 = quantile(heartrate_c, 0.25),
+    q75 = quantile(heartrate_c, 0.75),
+    .groups = "drop"
+  )
+```
+
+```{r, fig.width=10, fig.height=6.5}
+hr_steps_summary %>%
+  ggplot(aes(x = steps_bin, y = mean_heartrate_c)) +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  geom_line(linewidth = 0.8) +
+  geom_point(aes(color = subjects), size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_color_distiller(
+    palette = "Spectral",
+    direction = -1,
+    name = "Subjects",
+    breaks = c(10, 50, 100, 150)
+  ) +
+  labs(
+    title = "Heart rate response to physical activity",
+    subtitle = "Mean and interquartile range within 10-step intervals",
+    x = "Steps in five minutes",
+    y = "Heart rate relative to personal mean (bpm)"
+  ) +
+  theme_minimal()
+```
+
+## Support for high-activity intervals
+
+```{r}
+hr_steps_summary %>%
+  filter(steps_bin >= 500) %>%
+  mutate(
+    mean_heartrate_c = round(mean_heartrate_c, 1),
+    q25 = round(q25, 1),
+    q75 = round(q75, 1)
+  ) %>%
+  knitr::kable(
+    format = "pipe",
+    col.names = c(
+      "Steps",
+      "Observations",
+      "Subjects",
+      "Mean HR",
+      "Q25",
+      "Q75"
+    ),
+    caption = "Support for high-activity intervals"
+  )
+```
+
+Intervals containing 840 or more steps are supported by fewer than ten subjects and are excluded from the activity-adjustment model.
+
+```{r}
+steps_cutoff <- 840
+
+hr_steps_dat <- hr_dat %>%
+  filter(
+    !is.na(steps),
+    !is.na(heartrate_c),
+    steps < steps_cutoff
+  ) %>%
+  droplevels()
+```
+
+# Activity-adjusted heart rate
+
+Two models are compared to describe the non-linear association between physical activity and centered heart rate:
+
+1. a generalized additive model;
+2. a cubic polynomial model.
+
+```{r}
+hr_steps_dat <- hr_steps_dat %>%
+  mutate(steps_100 = steps / 100)
+
+hr_steps_gam <- mgcv::bam(
+  heartrate_c ~ s(steps, k = 30),
+  data = hr_steps_dat,
+  method = "fREML",
+  discrete = TRUE
+)
+
+hr_steps_cubic <- lm(
+  heartrate_c ~
+    steps_100 +
+    I(steps_100^2) +
+    I(steps_100^3),
+  data = hr_steps_dat
+)
+```
+
+## Model comparison
+
+```{r}
+gam_summary <- summary(hr_steps_gam)
+cubic_summary <- summary(hr_steps_cubic)
+
+hr_steps_model_comparison <- tibble(
+  model = c(
+    "GAM: s(steps, k = 30)",
+    "Cubic polynomial"
+  ),
+  variance_explained = c(
+    gam_summary$dev.expl,
+    cubic_summary$adj.r.squared
+  ),
+  residual_sd = c(
+    sqrt(gam_summary$scale),
+    cubic_summary$sigma
+  ),
+  complexity = c(
+    paste0(round(gam_summary$s.table[1, "edf"], 1), " EDF"),
+    "3 polynomial terms"
+  )
+) %>%
+  mutate(
+    variance_explained = scales::percent(
+      variance_explained,
+      accuracy = 0.1
+    ),
+    residual_sd = round(residual_sd, 2)
+  )
+
+hr_steps_model_comparison %>%
+  knitr::kable(
+    format = "pipe",
+    col.names = c(
+      "Model",
+      "Variance explained",
+      "Residual SD",
+      "Complexity"
+    ),
+    caption = "Physical-activity model comparison"
+  )
+```
+
+## Fitted relationships
+
+```{r}
+steps_predictions <- tibble(
+  steps = seq(
+    min(hr_steps_dat$steps),
+    max(hr_steps_dat$steps),
+    length.out = 500
+  )
+) %>%
+  mutate(steps_100 = steps / 100)
+
+steps_predictions <- steps_predictions %>%
+  mutate(
+    gam = predict(
+      hr_steps_gam,
+      newdata = steps_predictions
+    ),
+    cubic = predict(
+      hr_steps_cubic,
+      newdata = steps_predictions
+    )
+  ) %>%
+  pivot_longer(
+    cols = c(gam, cubic),
+    names_to = "model",
+    values_to = "expected_heartrate"
+  ) %>%
+  mutate(
+    model = recode(
+      model,
+      gam = "GAM",
+      cubic = "Cubic polynomial"
+    )
+  )
+```
+
+```{r, fig.width=10, fig.height=6.5}
+steps_predictions %>%
+  ggplot(
+    aes(
+      x = steps,
+      y = expected_heartrate,
+      linetype = model
+    )
+  ) +
+  geom_line(linewidth = 1) +
+  labs(
+    title = "Modeled association between physical activity and heart rate",
+    subtitle = "Comparison between the GAM and cubic polynomial",
+    x = "Steps in five minutes",
+    y = "Expected heart rate relative to personal mean (bpm)",
+    linetype = "Model"
+  ) +
+  theme_minimal()
+```
+
+The GAM explained `r scales::percent(gam_summary$dev.expl, accuracy = 0.1)` of the variance in centered heart rate, compared with `r scales::percent(cubic_summary$adj.r.squared, accuracy = 0.1)` for the cubic model.
+
+The residual standard deviations were `r round(sqrt(gam_summary$scale), 2)` bpm for the GAM and `r round(cubic_summary$sigma, 2)` bpm for the cubic model.
+
+The GAM provided only a modest improvement while requiring approximately `r round(gam_summary$s.table[1, "edf"], 1)` effective degrees of freedom. The cubic model uses only three polynomial terms and captures most of the observed association. It was therefore selected as the simpler activity-adjustment model.
+
+## Activity-adjusted outcome
+
+```{r}
+hr_steps_dat <- hr_steps_dat %>%
+  mutate(
+    heartrate_activity_expected = fitted(hr_steps_cubic),
+    heartrate_activity_adj = residuals(hr_steps_cubic)
+  )
+```
+
+`heartrate_activity_adj` is the observed centered heart rate minus the value expected from the number of steps recorded during the same five-minute interval.
+
+Positive values indicate a heart rate higher than expected for the recorded level of activity.
+
+## Residual association with physical activity
+
+```{r, fig.width=10, fig.height=6.5}
+hr_steps_dat %>%
+  ggplot(aes(x = steps, y = heartrate_activity_adj)) +
+  geom_hex(bins = 120) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral",
+    direction = -1,
+    transform = "log10",
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Activity-adjusted heart rate",
+    subtitle = "Residual heart rate after cubic adjustment for steps",
+    x = "Steps in five minutes",
+    y = "Activity-adjusted heart rate (bpm)"
+  ) +
+  theme_minimal()
+```
+
+# Thermal exposure and activity-adjusted heart rate
+
+## Humidex
+
+The association between thermal conditions and activity-adjusted heart rate is explored using one-unit Humidex intervals.
+
+To prevent subjects with more observations from dominating the summary, a mean value is first calculated for each subject within each Humidex interval. These subject-specific means are then averaged across subjects.
+
+```{r}
+hr_humidex_summary <- hr_steps_dat %>%
+  filter(
+    !is.na(humidex),
+    !is.na(heartrate_activity_adj)
+  ) %>%
+  mutate(humidex_bin = floor(humidex)) %>%
+  group_by(userId, humidex_bin) %>%
+  summarise(
+    user_mean = mean(heartrate_activity_adj),
+    observations = n(),
+    .groups = "drop"
+  ) %>%
+  group_by(humidex_bin) %>%
+  summarise(
+    observations = sum(observations),
+    subjects = n(),
+    mean_heartrate_adj = mean(user_mean),
+    sd_between_subjects = sd(user_mean),
+    .groups = "drop"
+  ) %>%
+  filter(subjects >= 10) %>%
+  mutate(
+    se = sd_between_subjects / sqrt(subjects),
+    ci_low =
+      mean_heartrate_adj -
+      qt(0.975, df = subjects - 1) * se,
+    ci_high =
+      mean_heartrate_adj +
+      qt(0.975, df = subjects - 1) * se
+  )
+```
+
+```{r, fig.width=10, fig.height=6.5}
+hr_humidex_summary %>%
+  ggplot(aes(x = humidex_bin, y = mean_heartrate_adj)) +
+  geom_ribbon(
+    aes(ymin = ci_low, ymax = ci_high),
+    alpha = 0.15
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point(aes(color = subjects), size = 2.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_color_distiller(
+    palette = "Spectral",
+    direction = -1,
+    name = "Subjects"
+  ) +
+  labs(
+    title = "Humidex and activity-adjusted heart rate",
+    subtitle = "Subject-balanced mean and 95% confidence interval",
+    x = "Humidex",
+    y = "Activity-adjusted heart rate (bpm)"
+  ) +
+  theme_minimal()
+```
+
+This analysis is exploratory. The activity-adjusted outcome is useful for visualizing the association, while formal inference should model physical activity and thermal exposure jointly and account for repeated measurements within subjects.
