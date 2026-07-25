@@ -1,5 +1,5 @@
 ---
-title: "Exploratory exposure-response hexplots"
+title: "Exploratory exposure-response"
 author: "Alessandro Fuschi"
 editor: source
 ---
@@ -53,6 +53,10 @@ rm(read_5min)
 ```
 
 ## Dataset construction
+
+Environmental, physiological and activity measurements are joined using `userId` and the five-minute time bucket.
+
+For steps, `step_mean` is used instead of `step_sum`, because the same step value is repeated in the raw observations within each bucket.
 
 ```{r}
 dat <- full_join(
@@ -115,6 +119,41 @@ dat <- full_join(
   ) %>%
   arrange(userId, bucket_5min) %>%
   mutate(userId = factor(userId))
+```
+
+```{r}
+mutate(
+    invalid_particle_order = coalesce(
+      pc03 < pc05 |
+        pc05 < pc1 |
+        pc1 < pc25 |
+        pc25 < pc5 |
+        pc5 < pc10,
+      FALSE
+    ),
+
+    invalid_particle_mass = coalesce(
+      pm1 > 1000 |
+        pm25 > 1000 |
+        pm10 > 1000,
+      FALSE
+    ),
+
+    invalid_particles =
+      invalid_particle_order |
+      invalid_particle_mass,
+
+    pm1 = if_else(invalid_particles, NA_real_, pm1),
+    pm25 = if_else(invalid_particles, NA_real_, pm25),
+    pm10 = if_else(invalid_particles, NA_real_, pm10),
+
+    pc03 = if_else(invalid_particles, NA_real_, pc03),
+    pc05 = if_else(invalid_particles, NA_real_, pc05),
+    pc1 = if_else(invalid_particles, NA_real_, pc1),
+    pc25 = if_else(invalid_particles, NA_real_, pc25),
+    pc5 = if_else(invalid_particles, NA_real_, pc5),
+    pc10 = if_else(invalid_particles, NA_real_, pc10)
+  )
 ```
 
 ## Derived variables
