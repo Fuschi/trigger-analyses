@@ -2,14 +2,19 @@
 
 ## 1. Download or refresh the data
 
-Run `data/download_data.qmd` manually from RStudio. It downloads all available
-`tidy`, `5min`, `hourly`, and `daily` dumps into their corresponding folders.
+Run the downloader from the project root:
 
-The downloader is the only notebook that accesses the TRIGGER API.
+```bash
+python data/download_data.py
+```
+
+It downloads the available `tidy`, `5min`, `hourly`, and `daily` dumps into
+their corresponding folders. The downloader is the only project component
+that accesses the TRIGGER API.
 
 ## 2. Analyse local files
 
-Analysis notebooks must read from the files already stored under `data/`:
+Analyses must read from the files already stored under `data/`:
 
 ```text
 data/tidy/
@@ -21,15 +26,21 @@ data/daily/
 This separates data acquisition from analysis and makes each analysis
 repeatable without additional API requests.
 
-## 3. Save generated results
+## 3. Write the analysis
 
-Each notebook should write tables, figures, and intermediate results to a
-matching folder under `outputs/`:
+Keep each analysis in one Quarto source file under `analyses/`:
 
 ```text
-notebooks/01_example/01_example.qmd
-outputs/01_example/
+analyses/example.qmd
 ```
 
-Downloaded data and generated outputs are ignored by Git. Notebook sources and
-rendered notebook documents remain version controlled.
+Keep the workflow linear: import the local data, construct the analytical
+dataset, describe the relevant coverage, and present the results. Avoid writing
+intermediate tables or figures unless an analysis explicitly requires a
+separate deliverable.
+
+## 4. Render the analysis
+
+Render the `.qmd` file to a self-contained `.html` file in the same directory.
+Only Quarto sources and HTML reports are version controlled. Downloaded data
+remain local and are ignored by Git.

@@ -2,9 +2,8 @@ project:
   type: default
   execute-dir: project
   render:
-    - notebooks/*/*.qmd
+    - analyses/*.qmd
 
 format:
   html:
     embed-resources: true
-  gfm: default

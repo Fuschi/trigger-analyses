@@ -32,8 +32,9 @@ SELECT_TABLE_GROUPS = {
     ],
 }
 
-# Safety limit for tables retrieved through select().
-SELECT_MAX_ROWS = 1_000_000
+# Maximum number of rows accepted by the API selection endpoint. Reaching this
+# limit is treated as a possible truncation rather than a successful download.
+SELECT_MAX_ROWS = 10_000
 
 
 def format_duration(seconds: float) -> str:

@@ -52,8 +52,9 @@ __pycache__/
 
 .quarto/
 **/*.quarto_ipynb
+analyses/*_files/
 
-# Rendered analysis HTML, Markdown and figure directories are intentionally
-# tracked so that notebook results can be viewed directly on GitHub.
+# Self-contained analysis HTML files are intentionally tracked next to their
+# Quarto sources.
 
 /.quarto/

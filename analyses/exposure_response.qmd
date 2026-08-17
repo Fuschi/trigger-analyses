@@ -1,0 +1,563 @@
+---
+title: "Exploratory exposure-response relationships"
+author: "Alessandro Fuschi"
+editor: source
+---
+
+## Setup
+
+```{r, message=FALSE}
+library(tidyverse)
+
+cfg <- list(
+  data_dir = file.path("data", "5min"),
+  timezone = "UTC",
+  hex_bins = 120,
+  particle_mass_max = 1000
+)
+```
+
+## Data import
+
+The five-minute tables are read using `userId` and `bucket_5min` as analytical keys.
+
+Rows associated with duplicated analytical keys are removed completely.
+
+```{r, message=FALSE}
+air <- read_csv(
+  file.path(cfg$data_dir, "myair_5min.csv.gz"),
+  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
+  col_types = cols(
+    userId = col_character(),
+    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
+  ),
+  show_col_types = FALSE
+) %>%
+  add_count(userId, bucket_5min, name = "key_n") %>%
+  filter(key_n == 1) %>%
+  select(-key_n)
+
+swh <- read_csv(
+  file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
+  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
+  col_types = cols(
+    userId = col_character(),
+    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
+  ),
+  show_col_types = FALSE
+) %>%
+  add_count(userId, bucket_5min, name = "key_n") %>%
+  filter(key_n == 1) %>%
+  select(-key_n)
+
+swl <- read_csv(
+  file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
+  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
+  col_types = cols(
+    userId = col_character(),
+    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
+  ),
+  show_col_types = FALSE
+) %>%
+  add_count(userId, bucket_5min, name = "key_n") %>%
+  filter(key_n == 1) %>%
+  select(-key_n)
+```
+
+## Dataset construction
+
+Environmental, physiological and activity measurements are joined using `userId` and the five-minute time bucket.
+
+For steps, `step_mean` is used instead of `step_sum`, because the same step value is repeated in the raw observations within each bucket.
+
+```{r}
+dat <- full_join(
+  air %>%
+    transmute(
+      userId,
+      bucket_5min,
+      temperature = temperature_mean,
+      temperature_min,
+      temperature_max,
+      humidity = humidity_mean,
+      humidity_min,
+      humidity_max,
+      pm1 = pm1_mean,
+      pm25 = pm25_mean,
+      pm10 = pm10_mean,
+      pc03 = pc03_mean,
+      pc05 = pc05_mean,
+      pc1 = pc1_mean,
+      pc25 = pc25_mean,
+      pc5 = pc5_mean,
+      pc10 = pc10_mean,
+      uvb = uvb_mean,
+      light = light_mean
+    ),
+  swh %>%
+    transmute(
+      userId,
+      bucket_5min,
+      heartrate = heartrate_mean,
+      heartrate_min,
+      heartrate_max,
+      breathrate = breathrate_mean,
+      breathrate_min,
+      breathrate_max,
+      oxygen = oxygens_mean,
+      oxygen_min = oxygens_min,
+      oxygen_max = oxygens_max
+    ),
+  by = c("userId", "bucket_5min"),
+  relationship = "one-to-one"
+) %>%
+  full_join(
+    swl %>%
+      transmute(
+        userId,
+        bucket_5min,
+        steps = step_mean,
+        bphigh = bphigh_mean,
+        bplow = bplow_mean,
+        bodytemp = bodytemp_mean,
+        bodytemp_min,
+        bodytemp_max,
+        skintemp = skintemp_mean,
+        skintemp_min,
+        skintemp_max
+      ),
+    by = c("userId", "bucket_5min"),
+    relationship = "one-to-one"
+  ) %>%
+  arrange(userId, bucket_5min) %>%
+  mutate(userId = factor(userId))
+```
+
+## Particle quality control
+
+Particle counts are cumulative above increasing size thresholds and should be
+monotonically decreasing. The same exploratory particulate-mass threshold used
+in `particle_quality_control.qmd` is applied here. When either check fails,
+the complete particle block is set to missing.
+
+```{r}
+dat <- dat %>%
+  mutate(
+    invalid_particle_order = coalesce(
+      pc03 < pc05 |
+        pc05 < pc1 |
+        pc1 < pc25 |
+        pc25 < pc5 |
+        pc5 < pc10,
+      FALSE
+    ),
+
+    invalid_particle_mass = coalesce(
+      pm1 > cfg$particle_mass_max |
+        pm25 > cfg$particle_mass_max |
+        pm10 > cfg$particle_mass_max,
+      FALSE
+    ),
+
+    invalid_particles =
+      invalid_particle_order |
+      invalid_particle_mass,
+
+    pm1 = if_else(invalid_particles, NA_real_, pm1),
+    pm25 = if_else(invalid_particles, NA_real_, pm25),
+    pm10 = if_else(invalid_particles, NA_real_, pm10),
+
+    pc03 = if_else(invalid_particles, NA_real_, pc03),
+    pc05 = if_else(invalid_particles, NA_real_, pc05),
+    pc1 = if_else(invalid_particles, NA_real_, pc1),
+    pc25 = if_else(invalid_particles, NA_real_, pc25),
+    pc5 = if_else(invalid_particles, NA_real_, pc5),
+    pc10 = if_else(invalid_particles, NA_real_, pc10)
+  )
+```
+
+## Derived variables
+
+```{r}
+dat <- dat %>%
+  mutate(
+    humidex = ThermIndex::humidex(
+      temp = temperature,
+      ur = humidity
+    ),
+    heartrate_range = heartrate_max - heartrate_min,
+    breathrate_range = breathrate_max - breathrate_min,
+    oxygen_range = oxygen_max - oxygen_min,
+    bodytemp_range = bodytemp_max - bodytemp_min,
+    skintemp_range = skintemp_max - skintemp_min,
+    pulse_pressure = bphigh - bplow,
+    mean_arterial_pressure = (bphigh + 2 * bplow) / 3
+  )
+```
+
+## Within-subject centering
+
+Physiological variables are expressed as deviations from each subject's personal mean.
+
+```{r}
+dat <- dat %>%
+  group_by(userId) %>%
+  mutate(
+    heartrate_c =
+      heartrate - mean(heartrate, na.rm = TRUE),
+
+    heartrate_range_c =
+      heartrate_range - mean(heartrate_range, na.rm = TRUE),
+
+    breathrate_c =
+      breathrate - mean(breathrate, na.rm = TRUE),
+
+    oxygen_min_c =
+      oxygen_min - mean(oxygen_min, na.rm = TRUE),
+
+    skintemp_c =
+      skintemp - mean(skintemp, na.rm = TRUE),
+
+    pulse_pressure_c =
+      pulse_pressure - mean(pulse_pressure, na.rm = TRUE),
+
+    mean_arterial_pressure_c =
+      mean_arterial_pressure -
+      mean(mean_arterial_pressure, na.rm = TRUE)
+  ) %>%
+  ungroup()
+```
+
+## Exposure-response hexplots
+
+The plots involving particulate matter use the exploratory quality-control rule
+defined above. The threshold should be validated against the sensor
+specification before formal inference. Particulate matter, UVB, and light use a
+`log1p` horizontal scale; all other axes retain their original units.
+
+### Steps and heart rate
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(steps), !is.na(heartrate_c)) %>%
+  ggplot(aes(x = steps, y = heartrate_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Steps and heart rate",
+    subtitle = "Five-minute observations",
+    x = "Steps in five minutes",
+    y = "Heart rate relative to personal mean (bpm)"
+  ) +
+  theme_minimal()
+```
+
+### Temperature and heart rate
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(temperature), !is.na(heartrate_c)) %>%
+  ggplot(aes(x = temperature, y = heartrate_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Temperature and heart rate",
+    subtitle = "Five-minute observations",
+    x = "Temperature (°C)",
+    y = "Heart rate relative to personal mean (bpm)"
+  ) +
+  theme_minimal()
+```
+
+### Humidex and heart rate
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(humidex), !is.na(heartrate_c)) %>%
+  ggplot(aes(x = humidex, y = heartrate_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Humidex and heart rate",
+    subtitle = "Five-minute observations",
+    x = "Humidex",
+    y = "Heart rate relative to personal mean (bpm)"
+  ) +
+  theme_minimal()
+```
+
+### Humidex and heart-rate range
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(humidex), !is.na(heartrate_range_c)) %>%
+  ggplot(aes(x = humidex, y = heartrate_range_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Humidex and heart-rate range",
+    subtitle = "Five-minute observations",
+    x = "Humidex",
+    y = "Heart-rate range relative to personal mean (bpm)"
+  ) +
+  theme_minimal()
+```
+
+### Temperature and skin temperature
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(temperature), !is.na(skintemp_c)) %>%
+  ggplot(aes(x = temperature, y = skintemp_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Temperature and skin temperature",
+    subtitle = "Five-minute observations",
+    x = "Temperature (°C)",
+    y = "Skin temperature relative to personal mean (°C)"
+  ) +
+  theme_minimal()
+```
+
+### Humidex and skin temperature
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(humidex), !is.na(skintemp_c)) %>%
+  ggplot(aes(x = humidex, y = skintemp_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Humidex and skin temperature",
+    subtitle = "Five-minute observations",
+    x = "Humidex",
+    y = "Skin temperature relative to personal mean (°C)"
+  ) +
+  theme_minimal()
+```
+
+### Humidex and breathing rate
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(humidex), !is.na(breathrate_c)) %>%
+  ggplot(aes(x = humidex, y = breathrate_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Humidex and breathing rate",
+    subtitle = "Five-minute observations",
+    x = "Humidex",
+    y = "Breathing rate relative to personal mean"
+  ) +
+  theme_minimal()
+```
+
+### Humidex and pulse pressure
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(humidex), !is.na(pulse_pressure_c)) %>%
+  ggplot(aes(x = humidex, y = pulse_pressure_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Humidex and pulse pressure",
+    subtitle = "Five-minute observations",
+    x = "Humidex",
+    y = "Pulse pressure relative to personal mean (mmHg)"
+  ) +
+  theme_minimal()
+```
+
+### Humidex and mean arterial pressure
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(humidex), !is.na(mean_arterial_pressure_c)) %>%
+  ggplot(aes(x = humidex, y = mean_arterial_pressure_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Humidex and mean arterial pressure",
+    subtitle = "Five-minute observations",
+    x = "Humidex",
+    y = "Mean arterial pressure relative to personal mean (mmHg)"
+  ) +
+  theme_minimal()
+```
+
+### PM2.5 and breathing rate
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(pm25), !is.na(breathrate_c)) %>%
+  ggplot(aes(x = pm25, y = breathrate_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_x_continuous(transform = "log1p") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "PM2.5 and breathing rate",
+    subtitle = "Five-minute observations",
+    x = "PM2.5 (µg/m³)",
+    y = "Breathing rate relative to personal mean"
+  ) +
+  theme_minimal()
+```
+
+### PM2.5 and oxygen saturation
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(pm25), !is.na(oxygen_min_c)) %>%
+  ggplot(aes(x = pm25, y = oxygen_min_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_x_continuous(transform = "log1p") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "PM2.5 and minimum oxygen saturation",
+    subtitle = "Five-minute observations",
+    x = "PM2.5 (µg/m³)",
+    y = "Minimum oxygen saturation relative to personal mean"
+  ) +
+  theme_minimal()
+```
+
+### PM2.5 and heart rate
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(pm25), !is.na(heartrate_c)) %>%
+  ggplot(aes(x = pm25, y = heartrate_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_x_continuous(transform = "log1p") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "PM2.5 and heart rate",
+    subtitle = "Five-minute observations",
+    x = "PM2.5 (µg/m³)",
+    y = "Heart rate relative to personal mean (bpm)"
+  ) +
+  theme_minimal()
+```
+
+### UVB and heart rate
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(uvb), !is.na(heartrate_c)) %>%
+  ggplot(aes(x = uvb, y = heartrate_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_x_continuous(transform = "log1p") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "UVB and heart rate",
+    subtitle = "Five-minute observations",
+    x = "UVB",
+    y = "Heart rate relative to personal mean (bpm)"
+  ) +
+  theme_minimal()
+```
+
+### Light and skin temperature
+
+```{r, fig.width=10, fig.height=6.5}
+dat %>%
+  filter(!is.na(light), !is.na(skintemp_c)) %>%
+  ggplot(aes(x = light, y = skintemp_c)) +
+  geom_hex(bins = cfg$hex_bins) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_x_continuous(transform = "log1p") +
+  scale_fill_distiller(
+    palette = "Spectral", direction = -1, transform = "log10",
+    breaks = c(1, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(big.mark = ".", decimal.mark = ","),
+    name = "Observations\n(log10 scale)"
+  ) +
+  labs(
+    title = "Light and skin temperature",
+    subtitle = "Five-minute observations",
+    x = "Light",
+    y = "Skin temperature relative to personal mean (°C)"
+  ) +
+  theme_minimal()
+```

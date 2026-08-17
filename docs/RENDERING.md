@@ -1,28 +1,34 @@
-# Rendering notebooks
+# Rendering analyses
 
-Analysis notebooks are rendered in both HTML and GitHub Markdown.
+Analyses are rendered only as self-contained HTML files. Figures,
+styles, and other resources are embedded in each HTML document, so rendering
+does not create version-controlled support directories.
 
-From the R console, render HTML first and GFM second:
+From the project root, render all analyses with:
 
-```r
-quarto::quarto_render(output_format = "html")
-quarto::quarto_render(output_format = "gfm")
+```bash
+quarto render
 ```
 
-Do not use `output_format = "all"`: the self-contained HTML render may remove
-the figure directory required by the Markdown output.
+Alternatively, from the R console:
+
+```r
+quarto::quarto_render()
+```
+
+To render a single analysis:
+
+```bash
+quarto render analyses/particle_quality_control.qmd
+```
 
 Project-wide rendering includes only:
 
 ```yaml
 project:
   render:
-    - notebooks/*/*.qmd
+    - analyses/*.qmd
 ```
 
-`data/download_data.py` is excluded from the Quarto rendering workflow.
-Run it manually from the project root with:
-
-```bash
-python data/download_data.py
-```
+The HTML file is written next to its `.qmd` source. Do not manually edit the
+generated HTML; regenerate it from the source notebook.

@@ -4,25 +4,25 @@ Reproducible analyses of wearable and environmental data collected in LongCLAVIS
 
 ## Workflow
 
-1. Configure the local R and Python environment.
-2. Download the TRIGGER table dumps into `data/`.
-3. Run analyses from the local files only.
-4. Save generated results under `outputs/`.
-5. Render analysis notebooks to HTML and GitHub Markdown.
+1.  Configure the local Python and R environments.
+2.  Download the TRIGGER table dumps into `data/`.
+3.  Write analyses as Quarto notebooks under `analyses/`.
+4.  Render the notebooks as self-contained HTML files.
+
+Analysis notebooks use local data only. API access is isolated in `data/download_data.py`.
 
 ## Project structure
 
-```text
+``` text
 trigger-analyses/
-├── data/          # download workflow and local table dumps
-├── docs/          # setup, workflow and rendering documentation
-├── notebooks/     # version-controlled analysis notebooks
-└── outputs/       # locally generated analysis results
+├── analyses/      # Quarto sources and self-contained HTML reports
+├── data/          # downloader and local table dumps
+└── docs/          # setup, workflow and rendering documentation
 ```
 
 ## Documentation
 
 - [Setup](docs/SETUP.md)
 - [Analysis workflow](docs/WORKFLOW.md)
-- [Rendering notebooks](docs/RENDERING.md)
+- [Rendering analyses](docs/RENDERING.md)
 - [Data directory](data/README.md)
