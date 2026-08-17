@@ -16,7 +16,7 @@ python -m pip install -r requirements.txt
 Install the packages used by the analyses:
 
 ```r
-install.packages(c("tidyverse", "ThermIndex", "mgcv", "hexbin", "knitr", "quarto"))
+install.packages(c("tidyverse", "ComplexUpset", "ThermIndex", "mgcv", "hexbin", "knitr", "quarto"))
 ```
 
 Python is used only by `data/download_data.py`; the R analyses do not require
