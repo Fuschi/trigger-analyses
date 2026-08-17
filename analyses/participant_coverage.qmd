@@ -1,0 +1,361 @@
+---
+title: "Coverage by participant and nationality"
+author: "Alessandro Fuschi"
+editor: source
+toc: true
+---
+
+## Setup
+
+```{r, message=FALSE}
+library(tidyverse)
+
+cfg <- list(
+  accounts_dir = file.path("data", "accounts"),
+  daily_dir = file.path("data", "daily"),
+  tidy_dir = file.path("data", "tidy"),
+  analysis_start_date = as.Date("2025-03-01"),
+  minutes_per_bucket = 5,
+  minutes_per_day = 24 * 60
+)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+## Aim and privacy
+
+This exploratory report compares data coverage across nationalities and participants.
+
+The primary unit is the five-minute bucket. One or multiple raw measurements from the same participant and data stream inside a bucket count as one observed participant-bucket. Raw record counts are intentionally not compared because the instruments have different sampling frequencies.
+
+Only `userId` and nationality are imported from the account table. Email and login information are not read. Real user identifiers are replaced by deterministic labels before any participant-level result is displayed; these labels are pseudonyms for this report and should not be interpreted as full anonymisation.
+
+## Data import
+
+```{r, message=FALSE}
+accounts <- read_csv(
+  file.path(cfg$accounts_dir, "active_accounts.csv.gz"),
+  col_select = c(userId, nationality),
+  col_types = cols(userId = col_character(), nationality = col_character()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+gps_raw <- read_csv(
+  file.path(cfg$daily_dir, "gps_daily.csv.gz"),
+  col_select = c(userId, date, five_min_n),
+  col_types = cols(userId = col_character(), date = col_date(), five_min_n = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+air_raw <- read_csv(
+  file.path(cfg$daily_dir, "myair_daily.csv.gz"),
+  col_select = c(userId, date, five_min_n),
+  col_types = cols(userId = col_character(), date = col_date(), five_min_n = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+smartwatch_high_raw <- read_csv(
+  file.path(cfg$daily_dir, "smartwatchhigh_daily.csv.gz"),
+  col_select = c(userId, date, five_min_n),
+  col_types = cols(userId = col_character(), date = col_date(), five_min_n = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+smartwatch_low_raw <- read_csv(
+  file.path(cfg$daily_dir, "smartwatchlow_daily.csv.gz"),
+  col_select = c(userId, date, five_min_n),
+  col_types = cols(userId = col_character(), date = col_date(), five_min_n = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+sleep_raw <- read_csv(
+  file.path(cfg$tidy_dir, "sleep_tidy.csv.gz"),
+  col_select = c(userId, date),
+  col_types = cols(userId = col_character(), date = col_date()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+```
+
+## Account checks
+
+The account table must contain one row per participant and a non-missing nationality before it can be joined to the coverage tables.
+
+```{r}
+if (anyDuplicated(accounts$userId) > 0) stop("Duplicated userId values were found in active_accounts.csv.gz.")
+if (any(is.na(accounts$nationality) | accounts$nationality == "")) stop("Missing nationality values were found in active_accounts.csv.gz.")
+
+nationality_roster <- accounts %>% count(nationality, name = "participants", sort = TRUE)
+
+nationality_roster %>%
+  knitr::kable(
+    format = "pipe", big.mark = ",",
+    col.names = c("Nationality", "Active participants"),
+    caption = "Participants in the active-account table"
+  )
+```
+
+## Analysis dataset
+
+The shared project inclusion rules are applied before coverage is calculated. Their diagnostics are collected in the dedicated data-quality report.
+
+```{r}
+gps_raw <- gps_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+air_raw <- air_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+smartwatch_high_raw <- smartwatch_high_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+smartwatch_low_raw <- smartwatch_low_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+sleep_raw <- sleep_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+gps <- gps_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+air <- air_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+smartwatch_high <- smartwatch_high_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+smartwatch_low <- smartwatch_low_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+sleep <- sleep_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+
+rm(gps_raw, air_raw, smartwatch_high_raw, smartwatch_low_raw, sleep_raw)
+```
+
+## Five-minute coverage dataset
+
+The four five-minute data streams are stacked without joining them to one another. Coverage is therefore retained even when a participant has data from only one instrument on a given day.
+
+```{r}
+five_min_daily <- bind_rows(
+  gps %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "GPS"),
+  air %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "Environment"),
+  smartwatch_high %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "Smartwatch high frequency"),
+  smartwatch_low %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "Smartwatch low frequency")
+)
+
+if (any(five_min_daily$five_min_buckets < 0, na.rm = TRUE)) stop("Negative five-minute bucket counts were found.")
+if (any(five_min_daily$five_min_buckets > cfg$minutes_per_day / cfg$minutes_per_bucket, na.rm = TRUE)) stop("A participant-day exceeds 288 five-minute buckets.")
+
+five_min_daily <- five_min_daily %>%
+  left_join(accounts, by = "userId", relationship = "many-to-one")
+
+if (any(is.na(five_min_daily$nationality))) stop("At least one participant in the coverage data is missing from the active-account table.")
+```
+
+## Participant pseudonyms
+
+Participants are ordered within nationality by their internal identifier and assigned a report-only sequential label. The original identifier remains available only for internal joins and is never printed.
+
+```{r}
+participant_key <- accounts %>%
+  arrange(nationality, userId) %>%
+  mutate(participant = sprintf("Participant %03d", row_number())) %>%
+  select(userId, participant)
+
+five_min_daily <- five_min_daily %>%
+  left_join(participant_key, by = "userId", relationship = "many-to-one")
+```
+
+## Coverage by nationality
+
+Participants without data in a stream are retained with zero coverage. This makes nationality comparisons refer to the complete active-account roster rather than only to contributors.
+
+```{r}
+participant_stream_observed <- five_min_daily %>%
+  filter(five_min_buckets > 0) %>%
+  group_by(userId, nationality, participant, data_stream) %>%
+  summarise(
+    active_days = n_distinct(date),
+    observed_5min_buckets = sum(five_min_buckets),
+    median_buckets_per_active_day = median(five_min_buckets),
+    .groups = "drop"
+  )
+
+participant_stream_coverage <- crossing(
+  accounts %>% left_join(participant_key, by = "userId", relationship = "one-to-one"),
+  data_stream = c("GPS", "Environment", "Smartwatch high frequency", "Smartwatch low frequency")
+) %>%
+  left_join(
+    participant_stream_observed,
+    by = c("userId", "nationality", "participant", "data_stream"),
+    relationship = "one-to-one"
+  ) %>%
+  mutate(
+    active_days = replace_na(active_days, 0L),
+    observed_5min_buckets = replace_na(observed_5min_buckets, 0),
+    median_buckets_per_active_day = replace_na(median_buckets_per_active_day, 0)
+  )
+
+nationality_stream_summary <- participant_stream_coverage %>%
+  group_by(nationality, data_stream) %>%
+  summarise(
+    participants = n(),
+    participants_with_data = sum(observed_5min_buckets > 0),
+    participant_days = sum(active_days),
+    total_5min_buckets = sum(observed_5min_buckets),
+    median_buckets_per_participant = median(observed_5min_buckets),
+    median_buckets_per_contributor = median(observed_5min_buckets[observed_5min_buckets > 0]),
+    .groups = "drop"
+  ) %>%
+  arrange(data_stream, nationality)
+
+nationality_stream_summary %>%
+  mutate(
+    total_5min_buckets = format(total_5min_buckets, big.mark = ",", scientific = FALSE),
+    median_buckets_per_participant = format(round(median_buckets_per_participant), big.mark = ",", scientific = FALSE),
+    median_buckets_per_contributor = format(round(median_buckets_per_contributor), big.mark = ",", scientific = FALSE)
+  ) %>%
+  knitr::kable(
+    format = "pipe", big.mark = ",",
+    col.names = c(
+      "Nationality", "Data stream", "Participants", "With data", "Participant-days",
+      "Observed 5-minute buckets", "Median per participant", "Median per contributor"
+    ),
+    caption = "Five-minute coverage by nationality and data stream"
+  )
+```
+
+### Absolute bucket totals
+
+Absolute totals depend on both the number of participants and their individual monitoring duration. They should therefore be read together with the participant-level distributions below.
+
+```{r, fig.width=12, fig.height=7}
+nationality_stream_summary %>%
+  ggplot(aes(x = nationality, y = total_5min_buckets, fill = nationality)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ data_stream, scales = "free_y") +
+  scale_y_continuous(labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Absolute five-minute bucket coverage by nationality",
+    subtitle = "Totals include all contributing participants in each nationality",
+    x = "Nationality", y = "Observed 5-minute buckets"
+  )
+```
+
+### Participant-level distributions
+
+Each point represents one pseudonymised participant with data in the corresponding stream. Active days describe monitoring duration, while total buckets combine duration and within-day coverage.
+
+```{r, fig.width=12, fig.height=8}
+participant_stream_coverage %>%
+  filter(observed_5min_buckets > 0) %>%
+  ggplot(aes(x = active_days, y = observed_5min_buckets, color = nationality)) +
+  geom_point(alpha = 0.6, size = 1.8) +
+  facet_wrap(~ data_stream, scales = "free") +
+  scale_x_continuous(labels = scales::label_number(big.mark = ",")) +
+  scale_y_continuous(labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Coverage duration and bucket volume by participant",
+    subtitle = "One point per participant and data stream",
+    x = "Active days", y = "Observed 5-minute buckets", color = "Nationality"
+  )
+```
+
+### Participant heatmap
+
+The heatmap includes the full active-account roster. Dark cells indicate zero or low coverage; participant labels are report-only pseudonyms.
+
+```{r, fig.width=11, fig.height=30}
+participant_order <- participant_stream_coverage %>%
+  group_by(nationality, participant) %>%
+  summarise(all_stream_buckets = sum(observed_5min_buckets), .groups = "drop") %>%
+  arrange(nationality, all_stream_buckets) %>%
+  pull(participant)
+
+participant_stream_coverage %>%
+  mutate(participant = factor(participant, levels = participant_order)) %>%
+  ggplot(aes(x = data_stream, y = participant, fill = observed_5min_buckets)) +
+  geom_tile(color = "white", linewidth = 0.15) +
+  facet_grid(nationality ~ ., scales = "free_y", space = "free_y") +
+  scale_fill_viridis_c(transform = "sqrt", labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Five-minute coverage by participant and data stream",
+    subtitle = "Absolute bucket counts; square-root colour scale",
+    x = NULL, y = NULL, fill = "5-minute buckets"
+  ) +
+  theme(
+    panel.grid = element_blank(), strip.text.y = element_text(angle = 0),
+    axis.text.x = element_text(angle = 25, hjust = 1), axis.text.y = element_text(size = 5)
+  )
+```
+
+## Daily coverage by nationality
+
+This view preserves the calendar date and compares the absolute number of participant-buckets contributed by each nationality. Differences in group size remain part of the absolute count.
+
+```{r}
+daily_nationality_coverage <- five_min_daily %>%
+  group_by(date, nationality, data_stream) %>%
+  summarise(observed_5min_buckets = sum(five_min_buckets, na.rm = TRUE), .groups = "drop")
+
+daily_nationality_grid <- crossing(
+  date = seq(cfg$analysis_start_date + 1, Sys.Date() - 1, by = "day"),
+  nationality = sort(unique(accounts$nationality)),
+  data_stream = c("GPS", "Environment", "Smartwatch high frequency", "Smartwatch low frequency")
+) %>%
+  left_join(daily_nationality_coverage, by = c("date", "nationality", "data_stream"), relationship = "one-to-one") %>%
+  mutate(observed_5min_buckets = replace_na(observed_5min_buckets, 0))
+```
+
+```{r, fig.width=13, fig.height=8}
+daily_nationality_grid %>%
+  ggplot(aes(x = date, y = observed_5min_buckets, color = nationality)) +
+  geom_line(linewidth = 0.45, alpha = 0.85) +
+  facet_wrap(~ data_stream, scales = "free_y", ncol = 1) +
+  scale_x_date(date_breaks = "2 months", date_labels = "%b\n%Y", expand = c(0, 0)) +
+  scale_y_continuous(labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Daily five-minute coverage by nationality",
+    subtitle = "Absolute participant-buckets",
+    x = NULL, y = "Observed 5-minute buckets", color = "Nationality"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Sleep coverage
+
+Sleep does not use five-minute buckets and is therefore reported separately as participant-nights. Participants without a sleep record are retained with zero coverage.
+
+```{r}
+sleep_participant_coverage <- accounts %>%
+  left_join(participant_key, by = "userId", relationship = "one-to-one") %>%
+  left_join(
+    sleep %>% count(userId, name = "participant_nights"),
+    by = "userId", relationship = "one-to-one"
+  ) %>%
+  mutate(participant_nights = replace_na(participant_nights, 0L))
+
+sleep_nationality_summary <- sleep_participant_coverage %>%
+  group_by(nationality) %>%
+  summarise(
+    participants = n(),
+    participants_with_sleep = sum(participant_nights > 0),
+    total_participant_nights = sum(participant_nights),
+    median_nights_per_participant = median(participant_nights),
+    median_nights_per_contributor = median(participant_nights[participant_nights > 0]),
+    .groups = "drop"
+  )
+
+sleep_nationality_summary %>%
+  mutate(
+    median_nights_per_participant = round(median_nights_per_participant),
+    median_nights_per_contributor = round(median_nights_per_contributor)
+  ) %>%
+  knitr::kable(
+    format = "pipe", big.mark = ",",
+    col.names = c(
+      "Nationality", "Participants", "With sleep", "Participant-nights",
+      "Median per participant", "Median per contributor"
+    ),
+    caption = "Sleep coverage by nationality"
+  )
+```
+
+```{r, fig.width=10, fig.height=6.5}
+sleep_participant_coverage %>%
+  ggplot(aes(x = nationality, y = participant_nights, color = nationality)) +
+  geom_boxplot(outlier.shape = NA, show.legend = FALSE) +
+  geom_jitter(width = 0.16, alpha = 0.45, size = 1.5, show.legend = FALSE) +
+  scale_y_continuous(labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Sleep coverage by participant and nationality",
+    subtitle = "Participants without sleep records are retained at zero",
+    x = "Nationality", y = "Participant-nights"
+  )
+```
+
+## Interpretation boundaries
+
+This report describes data availability rather than measurement validity. Absolute national totals are affected by nationality-group size, recruitment timing and monitoring duration. Participant-level comparisons are descriptive and should not be interpreted as differences in adherence or data quality without additional investigation.

@@ -12,13 +12,16 @@ library(tidyverse)
 cfg <- list(
   data_dir = file.path("data", "5min"),
   timezone = "UTC",
+  analysis_start_date = as.Date("2025-03-01"),
   particle_mass_max = 1000
 )
 ```
 
 ## Data import
 
-The five-minute MyAir table is imported using `userId` and `bucket_5min` as the analytical key.
+The five-minute MyAir table is imported using `userId` and `bucket_5min` as the analytical key. Only buckets whose UTC date is strictly after 1 March 2025 and strictly before the current date are retained.
+
+Each available bucket counts once, irrespective of the number of raw measurements produced inside the five-minute interval.
 
 Rows belonging to duplicated analytical keys are removed completely, because their origin cannot be resolved unambiguously at this stage.
 
@@ -33,6 +36,10 @@ air <- read_csv(
   ),
   show_col_types = FALSE
 ) %>%
+  filter(
+    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
+  ) %>%
   add_count(userId, bucket_5min, name = "key_n") %>%
   filter(key_n == 1) %>%
   select(-key_n)
@@ -158,7 +165,6 @@ air %>%
     caption = "Particle quality-control classification"
   )
 ```
-
 
 
 

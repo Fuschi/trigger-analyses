@@ -1,0 +1,280 @@
+---
+title: "Data quality control"
+author: "Alessandro Fuschi"
+editor: source
+toc: true
+---
+
+## Setup
+
+```{r, message=FALSE}
+library(tidyverse)
+
+cfg <- list(
+  daily_dir = file.path("data", "daily"),
+  five_min_dir = file.path("data", "5min"),
+  tidy_dir = file.path("data", "tidy"),
+  analysis_start_date = as.Date("2025-03-01"),
+  timezone = "UTC"
+)
+```
+
+## Aim
+
+This report centralises structural checks that are common to the analyses. It counts missing temporal keys, records on or before 1 March 2025, records from the current date or later, and duplicated analytical keys within the retained date window.
+
+Daily tables use `userId` and `date` as their analytical key. Five-minute tables use `userId` and `bucket_5min`. The duplicate summary reports only aggregate counts and never displays participant identifiers. All rows belonging to duplicated keys are excluded from downstream analyses when their origin cannot be resolved unambiguously.
+
+These checks describe table structure rather than the validity of individual measurements. The report reads local data without modifying it.
+
+## Daily and sleep tables
+
+Only the columns needed to inspect analytical keys are imported.
+
+```{r, message=FALSE}
+daily_keys <- bind_rows(
+  read_csv(
+    file.path(cfg$daily_dir, "gps_daily.csv.gz"), col_select = c(userId, date),
+    col_types = cols(userId = col_character(), date = col_date()),
+    na = c("", "NA", "NULL"), show_col_types = FALSE
+  ) %>% mutate(data_table = "gps_daily", resolution = "Daily"),
+  read_csv(
+    file.path(cfg$daily_dir, "myair_daily.csv.gz"), col_select = c(userId, date),
+    col_types = cols(userId = col_character(), date = col_date()),
+    na = c("", "NA", "NULL"), show_col_types = FALSE
+  ) %>% mutate(data_table = "myair_daily", resolution = "Daily"),
+  read_csv(
+    file.path(cfg$daily_dir, "smartwatchhigh_daily.csv.gz"), col_select = c(userId, date),
+    col_types = cols(userId = col_character(), date = col_date()),
+    na = c("", "NA", "NULL"), show_col_types = FALSE
+  ) %>% mutate(data_table = "smartwatchhigh_daily", resolution = "Daily"),
+  read_csv(
+    file.path(cfg$daily_dir, "smartwatchlow_daily.csv.gz"), col_select = c(userId, date),
+    col_types = cols(userId = col_character(), date = col_date()),
+    na = c("", "NA", "NULL"), show_col_types = FALSE
+  ) %>% mutate(data_table = "smartwatchlow_daily", resolution = "Daily"),
+  read_csv(
+    file.path(cfg$tidy_dir, "sleep_tidy.csv.gz"), col_select = c(userId, date),
+    col_types = cols(userId = col_character(), date = col_date()),
+    na = c("", "NA", "NULL"), show_col_types = FALSE
+  ) %>% mutate(data_table = "sleep_tidy", resolution = "Participant-night")
+)
+
+daily_date_summary <- daily_keys %>%
+  group_by(data_table, resolution) %>%
+  summarise(
+    rows = n(), missing_user_ids = sum(is.na(userId)), missing_dates = sum(is.na(date)),
+    on_or_before_start = sum(date <= cfg$analysis_start_date, na.rm = TRUE),
+    within_window = sum(date > cfg$analysis_start_date & date < Sys.Date(), na.rm = TRUE),
+    today_or_later = sum(date >= Sys.Date(), na.rm = TRUE), .groups = "drop"
+  )
+
+daily_retained_rows <- daily_keys %>%
+  filter(!is.na(userId), !is.na(date), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  count(data_table, resolution, name = "retained_rows")
+
+daily_duplicate_summary <- daily_keys %>%
+  filter(!is.na(userId), !is.na(date), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  count(data_table, resolution, userId, date, name = "key_n") %>%
+  filter(key_n > 1) %>%
+  group_by(data_table, resolution) %>%
+  summarise(duplicated_keys = n(), rows_involved = sum(key_n), .groups = "drop") %>%
+  right_join(daily_retained_rows, by = c("data_table", "resolution"), relationship = "one-to-one") %>%
+  mutate(
+    duplicated_keys = replace_na(duplicated_keys, 0L), rows_involved = replace_na(rows_involved, 0L),
+    percent_rows_involved = 100 * rows_involved / retained_rows
+  )
+
+rm(daily_keys, daily_retained_rows)
+```
+
+## Five-minute tables
+
+The same checks are repeated on the canonical five-minute tables. Timestamps are interpreted in UTC, consistently with the high-resolution analyses. Tables are processed one at a time to keep memory use limited.
+
+```{r, message=FALSE}
+gps_5min <- read_csv(
+  file.path(cfg$five_min_dir, "gps_5min.csv.gz"), col_select = c(userId, bucket_5min),
+  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
+  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+) %>% mutate(date = as.Date(bucket_5min, tz = cfg$timezone))
+
+gps_5min_date_summary <- gps_5min %>%
+  summarise(
+    data_table = "gps_5min", resolution = "5 minutes", rows = n(),
+    missing_user_ids = sum(is.na(userId)), missing_dates = sum(is.na(bucket_5min)),
+    on_or_before_start = sum(date <= cfg$analysis_start_date, na.rm = TRUE),
+    within_window = sum(date > cfg$analysis_start_date & date < Sys.Date(), na.rm = TRUE),
+    today_or_later = sum(date >= Sys.Date(), na.rm = TRUE)
+  )
+
+gps_5min_retained_rows <- gps_5min %>%
+  filter(!is.na(userId), !is.na(bucket_5min), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  summarise(retained_rows = n()) %>% pull()
+
+gps_5min_duplicate_summary <- gps_5min %>%
+  filter(!is.na(userId), !is.na(bucket_5min), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  count(userId, bucket_5min, name = "key_n") %>%
+  filter(key_n > 1) %>%
+  summarise(duplicated_keys = n(), rows_involved = sum(key_n)) %>%
+  mutate(
+    data_table = "gps_5min", resolution = "5 minutes", retained_rows = gps_5min_retained_rows,
+    percent_rows_involved = 100 * rows_involved / retained_rows
+  ) %>%
+  select(data_table, resolution, duplicated_keys, rows_involved, retained_rows, percent_rows_involved)
+
+rm(gps_5min, gps_5min_retained_rows)
+invisible(gc())
+```
+
+```{r, message=FALSE}
+myair_5min <- read_csv(
+  file.path(cfg$five_min_dir, "myair_5min.csv.gz"), col_select = c(userId, bucket_5min),
+  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
+  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+) %>% mutate(date = as.Date(bucket_5min, tz = cfg$timezone))
+
+myair_5min_date_summary <- myair_5min %>%
+  summarise(
+    data_table = "myair_5min", resolution = "5 minutes", rows = n(),
+    missing_user_ids = sum(is.na(userId)), missing_dates = sum(is.na(bucket_5min)),
+    on_or_before_start = sum(date <= cfg$analysis_start_date, na.rm = TRUE),
+    within_window = sum(date > cfg$analysis_start_date & date < Sys.Date(), na.rm = TRUE),
+    today_or_later = sum(date >= Sys.Date(), na.rm = TRUE)
+  )
+
+myair_5min_retained_rows <- myair_5min %>%
+  filter(!is.na(userId), !is.na(bucket_5min), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  summarise(retained_rows = n()) %>% pull()
+
+myair_5min_duplicate_summary <- myair_5min %>%
+  filter(!is.na(userId), !is.na(bucket_5min), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  count(userId, bucket_5min, name = "key_n") %>%
+  filter(key_n > 1) %>%
+  summarise(duplicated_keys = n(), rows_involved = sum(key_n)) %>%
+  mutate(
+    data_table = "myair_5min", resolution = "5 minutes", retained_rows = myair_5min_retained_rows,
+    percent_rows_involved = 100 * rows_involved / retained_rows
+  ) %>%
+  select(data_table, resolution, duplicated_keys, rows_involved, retained_rows, percent_rows_involved)
+
+rm(myair_5min, myair_5min_retained_rows)
+invisible(gc())
+```
+
+```{r, message=FALSE}
+smartwatch_high_5min <- read_csv(
+  file.path(cfg$five_min_dir, "smartwatchhigh_5min.csv.gz"), col_select = c(userId, bucket_5min),
+  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
+  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+) %>% mutate(date = as.Date(bucket_5min, tz = cfg$timezone))
+
+smartwatch_high_5min_date_summary <- smartwatch_high_5min %>%
+  summarise(
+    data_table = "smartwatchhigh_5min", resolution = "5 minutes", rows = n(),
+    missing_user_ids = sum(is.na(userId)), missing_dates = sum(is.na(bucket_5min)),
+    on_or_before_start = sum(date <= cfg$analysis_start_date, na.rm = TRUE),
+    within_window = sum(date > cfg$analysis_start_date & date < Sys.Date(), na.rm = TRUE),
+    today_or_later = sum(date >= Sys.Date(), na.rm = TRUE)
+  )
+
+smartwatch_high_5min_retained_rows <- smartwatch_high_5min %>%
+  filter(!is.na(userId), !is.na(bucket_5min), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  summarise(retained_rows = n()) %>% pull()
+
+smartwatch_high_5min_duplicate_summary <- smartwatch_high_5min %>%
+  filter(!is.na(userId), !is.na(bucket_5min), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  count(userId, bucket_5min, name = "key_n") %>%
+  filter(key_n > 1) %>%
+  summarise(duplicated_keys = n(), rows_involved = sum(key_n)) %>%
+  mutate(
+    data_table = "smartwatchhigh_5min", resolution = "5 minutes", retained_rows = smartwatch_high_5min_retained_rows,
+    percent_rows_involved = 100 * rows_involved / retained_rows
+  ) %>%
+  select(data_table, resolution, duplicated_keys, rows_involved, retained_rows, percent_rows_involved)
+
+rm(smartwatch_high_5min, smartwatch_high_5min_retained_rows)
+invisible(gc())
+```
+
+```{r, message=FALSE}
+smartwatch_low_5min <- read_csv(
+  file.path(cfg$five_min_dir, "smartwatchlow_5min.csv.gz"), col_select = c(userId, bucket_5min),
+  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
+  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+) %>% mutate(date = as.Date(bucket_5min, tz = cfg$timezone))
+
+smartwatch_low_5min_date_summary <- smartwatch_low_5min %>%
+  summarise(
+    data_table = "smartwatchlow_5min", resolution = "5 minutes", rows = n(),
+    missing_user_ids = sum(is.na(userId)), missing_dates = sum(is.na(bucket_5min)),
+    on_or_before_start = sum(date <= cfg$analysis_start_date, na.rm = TRUE),
+    within_window = sum(date > cfg$analysis_start_date & date < Sys.Date(), na.rm = TRUE),
+    today_or_later = sum(date >= Sys.Date(), na.rm = TRUE)
+  )
+
+smartwatch_low_5min_retained_rows <- smartwatch_low_5min %>%
+  filter(!is.na(userId), !is.na(bucket_5min), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  summarise(retained_rows = n()) %>% pull()
+
+smartwatch_low_5min_duplicate_summary <- smartwatch_low_5min %>%
+  filter(!is.na(userId), !is.na(bucket_5min), date > cfg$analysis_start_date, date < Sys.Date()) %>%
+  count(userId, bucket_5min, name = "key_n") %>%
+  filter(key_n > 1) %>%
+  summarise(duplicated_keys = n(), rows_involved = sum(key_n)) %>%
+  mutate(
+    data_table = "smartwatchlow_5min", resolution = "5 minutes", retained_rows = smartwatch_low_5min_retained_rows,
+    percent_rows_involved = 100 * rows_involved / retained_rows
+  ) %>%
+  select(data_table, resolution, duplicated_keys, rows_involved, retained_rows, percent_rows_involved)
+
+rm(smartwatch_low_5min, smartwatch_low_5min_retained_rows)
+invisible(gc())
+```
+
+## Date-window summary
+
+Rows in the analysis window have non-missing temporal keys and satisfy `2025-03-01 < date < Sys.Date()`. Missing participant identifiers are shown separately and are not eligible for the duplicate-key check.
+
+```{r}
+date_summary <- bind_rows(
+  daily_date_summary, gps_5min_date_summary, myair_5min_date_summary,
+  smartwatch_high_5min_date_summary, smartwatch_low_5min_date_summary
+) %>% arrange(factor(resolution, levels = c("5 minutes", "Daily", "Participant-night")), data_table)
+
+date_summary %>%
+  knitr::kable(
+    format = "pipe", big.mark = ",",
+    col.names = c(
+      "Data table", "Resolution", "Rows", "Missing user IDs", "Missing dates/timestamps",
+      "On or before start", "Within window", "Today or later"
+    ),
+    caption = paste0("Date-window checks; retained window: ", cfg$analysis_start_date, " < date < ", Sys.Date())
+  )
+```
+
+## Duplicate analytical keys
+
+Duplicates are evaluated after applying the date window and removing rows with missing key components. “Rows involved” counts every row belonging to a duplicated key; these are the rows excluded by the analysis notebooks.
+
+```{r}
+duplicate_summary <- bind_rows(
+  daily_duplicate_summary, gps_5min_duplicate_summary, myair_5min_duplicate_summary,
+  smartwatch_high_5min_duplicate_summary, smartwatch_low_5min_duplicate_summary
+) %>% arrange(factor(resolution, levels = c("5 minutes", "Daily", "Participant-night")), data_table)
+
+duplicate_summary %>%
+  mutate(percent_rows_involved = round(percent_rows_involved, 3)) %>%
+  knitr::kable(
+    format = "pipe", big.mark = ",",
+    col.names = c(
+      "Data table", "Resolution", "Duplicated keys", "Rows involved",
+      "Rows with complete keys in window", "Rows involved (%)"
+    ),
+    caption = "Duplicated analytical keys within the retained date window"
+  )
+```
+
+## Interpretation
+
+This report identifies where records are excluded by the shared temporal and key-uniqueness rules. It does not decide whether non-duplicated sensor values are plausible, complete enough for a specific model, or clinically meaningful; those decisions remain analysis-specific.

@@ -1,0 +1,389 @@
+---
+title: "Data coverage"
+author: "Alessandro Fuschi"
+editor: source
+toc: true
+---
+
+## Setup
+
+```{r, message=FALSE}
+library(tidyverse)
+
+cfg <- list(
+  daily_dir = file.path("data", "daily"),
+  tidy_dir = file.path("data", "tidy"),
+  analysis_start_date = as.Date("2025-03-01"),
+  minutes_per_bucket = 5,
+  minutes_per_day = 24 * 60
+)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+## Aim
+
+This exploratory report describes the absolute temporal coverage of the local data snapshot.
+
+The five-minute bucket is the common temporal unit across instruments. One or multiple raw measurements for the same participant and variable within a bucket count as one observed bucket. Five-minute coverage is reconstructed from the variable-specific bucket counts stored in the daily tables. Sleep is reported separately because it is observed once per participant-night rather than continuously through the day.
+
+An observed day means that at least one value is available; it is not necessarily a complete day. The report therefore keeps calendar days, participant-days and observed minutes distinct. No minimum daily coverage threshold is imposed at this exploratory stage.
+
+## Data import
+
+Only identifiers, dates and coverage-count columns are imported. The analytical key is `userId` and `date` within each table.
+
+```{r, message=FALSE}
+gps_raw <- read_csv(
+  file.path(cfg$daily_dir, "gps_daily.csv.gz"),
+  col_select = c(userId, date, five_min_n, position_5min_n),
+  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+air_raw <- read_csv(
+  file.path(cfg$daily_dir, "myair_daily.csv.gz"),
+  col_select = c(
+    userId, date, five_min_n, pm1_5min_n, pm25_5min_n, pm10_5min_n,
+    temperature_5min_n, humidity_5min_n, pressure_5min_n, sound_5min_n,
+    uvb_5min_n, light_5min_n
+  ),
+  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+smartwatch_high_raw <- read_csv(
+  file.path(cfg$daily_dir, "smartwatchhigh_daily.csv.gz"),
+  col_select = c(
+    userId, date, five_min_n, heartrate_5min_n, oxygens_5min_n,
+    breathrate_5min_n, sleeprate_5min_n
+  ),
+  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+smartwatch_low_raw <- read_csv(
+  file.path(cfg$daily_dir, "smartwatchlow_daily.csv.gz"),
+  col_select = c(
+    userId, date, five_min_n, step_5min_n, cal_5min_n, bphigh_5min_n,
+    bplow_5min_n, bodytemp_5min_n, skintemp_5min_n
+  ),
+  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+
+sleep_raw <- read_csv(
+  file.path(cfg$tidy_dir, "sleep_tidy.csv.gz"),
+  col_select = c(
+    userId, date, sleepduration, awake, insomnia, remsleep, lightsleep,
+    deepsleep, sleepquality, fallsleepefficiency
+  ),
+  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
+  na = c("", "NA", "NULL"), show_col_types = FALSE
+)
+```
+
+## Analysis dataset
+
+The shared project inclusion rules are applied before coverage is calculated. Their diagnostics are collected in the dedicated data-quality report.
+
+```{r}
+gps_raw <- gps_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+air_raw <- air_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+smartwatch_high_raw <- smartwatch_high_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+smartwatch_low_raw <- smartwatch_low_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+sleep_raw <- sleep_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
+gps <- gps_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+air <- air_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+smartwatch_high <- smartwatch_high_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+smartwatch_low <- smartwatch_low_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+sleep <- sleep_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+
+rm(gps_raw, air_raw, smartwatch_high_raw, smartwatch_low_raw, sleep_raw)
+```
+
+## Five-minute variable coverage
+
+The daily tables contain the number of five-minute buckets with an available value for each variable. A participant contributes at most once per variable and bucket, irrespective of the number of raw measurements inside it. Counts summed across participants are therefore participant-buckets, not clock time for the cohort as a whole.
+
+```{r}
+gps_coverage <- gps %>%
+  select(userId, date, position_5min_n) %>%
+  pivot_longer(-c(userId, date), names_to = "variable", values_to = "five_min_buckets") %>%
+  mutate(domain = "Location", variable = recode(variable, position_5min_n = "Position"))
+
+air_coverage <- air %>%
+  select(-five_min_n) %>%
+  pivot_longer(-c(userId, date), names_to = "variable", values_to = "five_min_buckets") %>%
+  mutate(
+    domain = "Environment",
+    variable = recode(
+      variable, pm1_5min_n = "PM1", pm25_5min_n = "PM2.5", pm10_5min_n = "PM10",
+      temperature_5min_n = "Temperature", humidity_5min_n = "Relative humidity",
+      pressure_5min_n = "Pressure", sound_5min_n = "Sound", uvb_5min_n = "UV-B",
+      light_5min_n = "Light"
+    )
+  )
+
+smartwatch_high_coverage <- smartwatch_high %>%
+  select(-five_min_n) %>%
+  pivot_longer(-c(userId, date), names_to = "variable", values_to = "five_min_buckets") %>%
+  mutate(
+    domain = "Physiology",
+    variable = recode(
+      variable, heartrate_5min_n = "Heart rate", oxygens_5min_n = "Oxygen saturation",
+      breathrate_5min_n = "Breathing rate", sleeprate_5min_n = "Sleep state"
+    )
+  )
+
+smartwatch_low_coverage <- smartwatch_low %>%
+  select(-five_min_n) %>%
+  pivot_longer(-c(userId, date), names_to = "variable", values_to = "five_min_buckets") %>%
+  mutate(
+    domain = if_else(variable %in% c("step_5min_n", "cal_5min_n"), "Activity", "Physiology"),
+    variable = recode(
+      variable, step_5min_n = "Steps", cal_5min_n = "Calories",
+      bphigh_5min_n = "Systolic blood pressure", bplow_5min_n = "Diastolic blood pressure",
+      bodytemp_5min_n = "Body temperature", skintemp_5min_n = "Skin temperature"
+    )
+  )
+
+five_min_coverage <- bind_rows(
+  gps_coverage, air_coverage, smartwatch_high_coverage, smartwatch_low_coverage
+) %>%
+  mutate(observed_minutes = five_min_buckets * cfg$minutes_per_bucket)
+
+if (any(five_min_coverage$five_min_buckets < 0, na.rm = TRUE)) stop("Negative five-minute coverage counts were found.")
+if (any(five_min_coverage$five_min_buckets > cfg$minutes_per_day / cfg$minutes_per_bucket, na.rm = TRUE)) stop("A daily coverage count exceeds 288 five-minute buckets.")
+```
+
+### Absolute coverage summary
+
+`Participant-days` counts participant–date combinations with at least one observed bucket. Minutes are a direct conversion of the primary bucket count.
+
+```{r}
+five_min_summary <- five_min_coverage %>%
+  filter(five_min_buckets > 0) %>%
+  group_by(domain, variable) %>%
+  summarise(
+    participants = n_distinct(userId),
+    calendar_days = n_distinct(date),
+    participant_days = n(),
+    observed_5min_buckets = sum(five_min_buckets),
+    observed_minutes = sum(observed_minutes),
+    median_buckets_per_participant_day = median(five_min_buckets),
+    .groups = "drop"
+  ) %>%
+  arrange(domain, variable)
+
+five_min_summary %>%
+  mutate(
+    observed_5min_buckets = format(observed_5min_buckets, big.mark = ",", scientific = FALSE),
+    observed_minutes = format(observed_minutes, big.mark = ",", scientific = FALSE),
+    median_buckets_per_participant_day = round(median_buckets_per_participant_day)
+  ) %>%
+  knitr::kable(
+    format = "pipe", big.mark = ",",
+    col.names = c(
+      "Domain", "Variable", "Participants", "Calendar days", "Participant-days",
+      "Observed 5-minute buckets", "Observed minutes", "Median buckets per participant-day"
+    ),
+    caption = "Absolute five-minute coverage by variable"
+  )
+```
+
+### Daily five-minute buckets by variable
+
+The heatmap shows the absolute number of five-minute participant-buckets observed on each date. A square-root colour transformation makes both sparse and dense periods visible while the legend remains in buckets.
+
+```{r, fig.width=14, fig.height=10}
+variable_lookup <- five_min_coverage %>% distinct(domain, variable)
+
+daily_variable_coverage <- five_min_coverage %>%
+  group_by(date, domain, variable) %>%
+  summarise(five_min_buckets = sum(five_min_buckets, na.rm = TRUE), .groups = "drop")
+
+daily_variable_grid <- crossing(
+  date = seq(cfg$analysis_start_date + 1, Sys.Date() - 1, by = "day"),
+  variable_lookup
+) %>%
+  left_join(daily_variable_coverage, by = c("date", "domain", "variable"), relationship = "one-to-one") %>%
+  mutate(five_min_buckets = replace_na(five_min_buckets, 0))
+
+daily_variable_grid %>%
+  ggplot(aes(x = date, y = variable, fill = five_min_buckets)) +
+  geom_tile() +
+  facet_grid(domain ~ ., scales = "free_y", space = "free_y") +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b\n%Y", expand = c(0, 0)) +
+  scale_fill_viridis_c(transform = "sqrt", labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Daily coverage by variable",
+    subtitle = "Absolute five-minute participant-buckets; square-root colour scale",
+    x = NULL, y = NULL, fill = "5-minute buckets"
+  ) +
+  theme(
+    panel.grid = element_blank(), strip.text.y = element_text(angle = 0),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+## Calendar coverage by data stream
+
+For this calendar view, a participant contributes once to a date when at least one measurement is available in the corresponding stream. The colour therefore represents the absolute number of participants with any data, independently of how many minutes they contributed.
+
+```{r}
+stream_days <- bind_rows(
+  gps %>% filter(five_min_n > 0) %>% distinct(userId, date) %>% mutate(data_stream = "GPS"),
+  air %>% filter(five_min_n > 0) %>% distinct(userId, date) %>% mutate(data_stream = "Environment"),
+  smartwatch_high %>% filter(five_min_n > 0) %>% distinct(userId, date) %>% mutate(data_stream = "Smartwatch high frequency"),
+  smartwatch_low %>% filter(five_min_n > 0) %>% distinct(userId, date) %>% mutate(data_stream = "Smartwatch low frequency"),
+  sleep %>% filter(if_any(-c(userId, date), ~ !is.na(.x))) %>% distinct(userId, date) %>% mutate(data_stream = "Sleep")
+) %>%
+  count(data_stream, date, name = "participants")
+
+calendar_grid <- crossing(
+  data_stream = c("GPS", "Environment", "Smartwatch high frequency", "Smartwatch low frequency", "Sleep"),
+  date = seq(cfg$analysis_start_date + 1, Sys.Date() - 1, by = "day")
+) %>%
+  left_join(stream_days, by = c("data_stream", "date"), relationship = "one-to-one") %>%
+  mutate(
+    participants = replace_na(participants, 0L),
+    year = factor(format(date, "%Y")),
+    week = as.integer(format(date, "%W")),
+    weekday = factor(
+      as.integer(format(date, "%u")), levels = 1:7,
+      labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    )
+  )
+```
+
+```{r, fig.width=15, fig.height=11}
+calendar_grid %>%
+  ggplot(aes(x = week, y = weekday, fill = participants)) +
+  geom_tile(color = "white", linewidth = 0.15) +
+  facet_grid(data_stream ~ year) +
+  scale_x_continuous(breaks = seq(0, 52, 13), expand = c(0, 0)) +
+  scale_y_discrete(drop = FALSE) +
+  scale_fill_viridis_c(labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Calendar coverage by data stream",
+    subtitle = "Participants contributing at least one measurement on each date",
+    x = "Week of year", y = NULL, fill = "Participants"
+  ) +
+  theme(panel.grid = element_blank(), strip.text.y = element_text(angle = 0))
+```
+
+## Calendar coverage in five-minute buckets
+
+This calendar uses the common five-minute unit directly. A participant-bucket is one five-minute window for one participant and data stream. It counts once whether the source instrument produced one or several raw measurements inside that window. Sleep is not included because it is a nightly dataset rather than a five-minute stream.
+
+```{r}
+stream_bucket_days <- bind_rows(
+  gps %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "GPS"),
+  air %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "Environment"),
+  smartwatch_high %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "Smartwatch high frequency"),
+  smartwatch_low %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "Smartwatch low frequency")
+)
+
+if (any(stream_bucket_days$five_min_buckets < 0, na.rm = TRUE)) stop("Negative stream-level five-minute bucket counts were found.")
+if (any(stream_bucket_days$five_min_buckets > cfg$minutes_per_day / cfg$minutes_per_bucket, na.rm = TRUE)) stop("A stream-level daily coverage count exceeds 288 five-minute buckets.")
+
+daily_stream_buckets <- stream_bucket_days %>%
+  group_by(data_stream, date) %>%
+  summarise(five_min_buckets = sum(five_min_buckets, na.rm = TRUE), .groups = "drop")
+
+bucket_calendar_grid <- crossing(
+  data_stream = c("GPS", "Environment", "Smartwatch high frequency", "Smartwatch low frequency"),
+  date = seq(cfg$analysis_start_date + 1, Sys.Date() - 1, by = "day")
+) %>%
+  left_join(daily_stream_buckets, by = c("data_stream", "date"), relationship = "one-to-one") %>%
+  mutate(
+    five_min_buckets = replace_na(five_min_buckets, 0),
+    year = factor(format(date, "%Y")),
+    week = as.integer(format(date, "%W")),
+    weekday = factor(
+      as.integer(format(date, "%u")), levels = 1:7,
+      labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    )
+  )
+```
+
+```{r, fig.width=15, fig.height=9}
+bucket_calendar_grid %>%
+  ggplot(aes(x = week, y = weekday, fill = five_min_buckets)) +
+  geom_tile(color = "white", linewidth = 0.15) +
+  facet_grid(data_stream ~ year) +
+  scale_x_continuous(breaks = seq(0, 52, 13), expand = c(0, 0)) +
+  scale_y_discrete(drop = FALSE) +
+  scale_fill_viridis_c(transform = "sqrt", labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Daily five-minute bucket coverage by data stream",
+    subtitle = "Absolute participant-buckets; square-root colour scale",
+    x = "Week of year", y = NULL, fill = "5-minute buckets"
+  ) +
+  theme(panel.grid = element_blank(), strip.text.y = element_text(angle = 0))
+```
+
+## Sleep-variable coverage
+
+Sleep coverage is expressed as participant-nights. A value of zero is retained as observed data; only missing values are treated as unavailable.
+
+```{r}
+sleep_coverage <- sleep %>%
+  pivot_longer(-c(userId, date), names_to = "variable", values_to = "value") %>%
+  mutate(
+    variable = recode(
+      variable, sleepduration = "Sleep duration", awake = "Awake time",
+      insomnia = "Insomnia", remsleep = "REM sleep", lightsleep = "Light sleep",
+      deepsleep = "Deep sleep", sleepquality = "Sleep quality",
+      fallsleepefficiency = "Sleep onset efficiency"
+    )
+  )
+
+sleep_summary <- sleep_coverage %>%
+  filter(!is.na(value)) %>%
+  group_by(variable) %>%
+  summarise(
+    participants = n_distinct(userId),
+    calendar_days = n_distinct(date),
+    participant_nights = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(variable)
+
+sleep_summary %>%
+  knitr::kable(
+    format = "pipe", big.mark = ",",
+    col.names = c("Variable", "Participants", "Calendar days", "Participant-nights"),
+    caption = "Absolute sleep coverage by variable"
+  )
+```
+
+```{r, fig.width=13, fig.height=5.5}
+daily_sleep_coverage <- sleep_coverage %>%
+  filter(!is.na(value)) %>%
+  count(date, variable, name = "participant_nights")
+
+sleep_grid <- crossing(
+  date = seq(cfg$analysis_start_date + 1, Sys.Date() - 1, by = "day"),
+  variable = unique(sleep_coverage$variable)
+) %>%
+  left_join(daily_sleep_coverage, by = c("date", "variable"), relationship = "one-to-one") %>%
+  mutate(participant_nights = replace_na(participant_nights, 0L))
+
+sleep_grid %>%
+  ggplot(aes(x = date, y = variable, fill = participant_nights)) +
+  geom_tile() +
+  scale_x_date(date_breaks = "2 months", date_labels = "%b\n%Y", expand = c(0, 0)) +
+  scale_fill_viridis_c(labels = scales::label_number(big.mark = ",")) +
+  labs(
+    title = "Daily sleep coverage",
+    subtitle = "Absolute participant-nights with an observed value",
+    x = NULL, y = NULL, fill = "Participant-nights"
+  ) +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Interpretation boundaries
+
+This report describes availability, not measurement validity. A covered interval may still contain implausible sensor values and a covered day may contain only five minutes of data. Variable-specific quality control and minimum coverage requirements should therefore be defined in the analysis that uses each outcome or exposure.

@@ -54,6 +54,16 @@ are more important than compact or clever code.
 
 ## Analytical data conventions
 
+- Unless an analysis explicitly requires a different window, include only
+  dates strictly after 2025-03-01 and strictly before `Sys.Date()`. Earlier
+  records were collected during testing, and the current day may be incomplete.
+- Use the five-minute bucket as the canonical temporal unit across data
+  streams. For availability and coverage, one or multiple raw measurements
+  within the same participant, variable, and five-minute bucket count as one
+  observed bucket.
+- Express high-resolution coverage primarily as observed five-minute buckets.
+  Convert buckets to minutes or hours only as a clearly labelled derived
+  quantity.
 - Use `userId` and the appropriate time bucket as explicit analytical keys.
 - Assert the expected join relationship, such as `relationship = "one-to-one"`,
   whenever supported.

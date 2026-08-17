@@ -12,6 +12,7 @@ library(tidyverse)
 cfg <- list(
   data_dir = file.path("data", "5min"),
   timezone = "UTC",
+  analysis_start_date = as.Date("2025-03-01"),
   hex_bins = 120,
   particle_mass_max = 1000
 )
@@ -19,7 +20,9 @@ cfg <- list(
 
 ## Data import
 
-The five-minute tables are read using `userId` and `bucket_5min` as analytical keys.
+The five-minute tables are read using `userId` and `bucket_5min` as analytical keys. Only buckets whose UTC date is strictly after 1 March 2025 and strictly before the current date are retained.
+
+Each available bucket counts once, irrespective of the number of raw measurements produced inside the five-minute interval.
 
 Rows associated with duplicated analytical keys are removed completely.
 
@@ -33,6 +36,10 @@ air <- read_csv(
   ),
   show_col_types = FALSE
 ) %>%
+  filter(
+    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
+  ) %>%
   add_count(userId, bucket_5min, name = "key_n") %>%
   filter(key_n == 1) %>%
   select(-key_n)
@@ -46,6 +53,10 @@ swh <- read_csv(
   ),
   show_col_types = FALSE
 ) %>%
+  filter(
+    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
+  ) %>%
   add_count(userId, bucket_5min, name = "key_n") %>%
   filter(key_n == 1) %>%
   select(-key_n)
@@ -59,6 +70,10 @@ swl <- read_csv(
   ),
   show_col_types = FALSE
 ) %>%
+  filter(
+    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
+  ) %>%
   add_count(userId, bucket_5min, name = "key_n") %>%
   filter(key_n == 1) %>%
   select(-key_n)
