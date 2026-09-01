@@ -1,11 +1,11 @@
 # trigger-analyses
 
-Reproducible analyses of wearable and environmental data collected in LongCLAVIS within the European TRIGGER project.
+Reproducible analyses of environmental, wearable, GPS, and sleep data collected in LongCLAVIS within the European TRIGGER project.
 
 ## Workflow
 
-1.  Configure the local Python and R environments.
-2.  Download the TRIGGER table dumps into `data/`.
+1.  [Configure the local Python and R environments](docs/SETUP.md).
+2.  [Download or refresh the TRIGGER table dumps](data/README.md) in `data/`.
 3.  Write analyses as Quarto notebooks under `analyses/`.
 4.  Render the notebooks as self-contained HTML files.
 
@@ -31,4 +31,4 @@ trigger-analyses/
 - [Setup](docs/SETUP.md)
 - [Analysis workflow](docs/WORKFLOW.md)
 - [Rendering analyses](docs/RENDERING.md)
-- [Data directory](data/README.md)
+- [Downloading and storing data](data/README.md)

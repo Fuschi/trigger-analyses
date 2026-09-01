@@ -2,11 +2,7 @@
 
 ## 1. Download or refresh the data
 
-Run the downloader from the project root:
-
-```bash
-python data/download_data.py
-```
+Follow the complete [data download instructions](../data/README.md).
 
 It downloads the available `tidy`, `5min`, `hourly`, and `daily` dumps into
 their corresponding folders. The downloader is the only project component
@@ -21,6 +17,7 @@ data/tidy/
 data/5min/
 data/hourly/
 data/daily/
+data/accounts/
 ```
 
 This separates data acquisition from analysis and makes each analysis
