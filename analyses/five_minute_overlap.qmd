@@ -23,94 +23,79 @@ theme_set(theme_minimal(base_size = 12))
 
 ## Aim
 
-This report describes how often the four high-resolution data streams overlap. Two observations overlap only when they belong to the same participant and the same UTC five-minute bucket. The counts therefore represent matched participant-buckets rather than pairs of raw sensor readings.
-
-The first view shows all pairwise intersections. The second partitions the union of the data into exact combinations of available streams, providing the information of an UpSet plot in a compact form suitable for four sets.
-
-The report then repeats the comparison using the availability of 19 individual variables. Their origin is retained explicitly, and the variable-level UpSet plot shows the 20 most frequent exact intersections. This limit affects only presentation: all intersections are calculated before ranking.
-
-This is a coverage analysis: an overlap identifies buckets that could contribute to a paired analysis, but it does not verify whether particular measurements inside those buckets are non-missing or valid.
+Overlap requires the same participant and UTC five-minute bucket. Stream overlap counts shared rows; variable overlap requires non-missing values.
 
 ## Data import
 
-Only the analytical keys and variables used in the overlap analysis are imported. The shared project inclusion rules are applied without repeating their diagnostics, which are available in the [data-quality report](data_quality_control.html).
-
 ```{r, message=FALSE}
-gps <- read_csv(
-  file.path(cfg$data_dir, "gps_5min.csv.gz"),
-  col_select = c(userId, bucket_5min, longitude_mean, latitude_mean),
-  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
-  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
-) %>%
-  filter(
-    !is.na(userId), !is.na(bucket_5min),
-    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
-    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
-
-air <- read_csv(
-  file.path(cfg$data_dir, "myair_5min.csv.gz"),
-  col_select = c(
-    userId, bucket_5min, pm1_mean, pm25_mean, pm10_mean, temperature_mean,
-    humidity_mean, pressure_mean, sound_mean, uvb_mean, light_mean
-  ),
-  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
-  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
-) %>%
-  filter(
-    !is.na(userId), !is.na(bucket_5min),
-    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
-    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
-
-smartwatch_high <- read_csv(
-  file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
-  col_select = c(userId, bucket_5min, heartrate_mean, oxygens_mean, breathrate_mean),
-  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
-  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
-) %>%
-  filter(
-    !is.na(userId), !is.na(bucket_5min),
-    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
-    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
-
-smartwatch_low <- read_csv(
-  file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
-  col_select = c(
-    userId, bucket_5min, step_mean, cal_mean, bphigh_mean, bplow_mean,
-    bodytemp_mean, skintemp_mean
-  ),
-  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
-  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
-) %>%
-  filter(
-    !is.na(userId), !is.na(bucket_5min),
-    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
-    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
-
-if (anyDuplicated(gps) > 0 || anyDuplicated(air) > 0 ||
-    anyDuplicated(smartwatch_high) > 0 || anyDuplicated(smartwatch_low) > 0) {
-  stop("At least one data stream contains duplicated analytical keys after filtering.")
+if (!exists("gps_5min", inherits = FALSE)) {
+  gps_5min <- read_csv(
+    file.path(cfg$data_dir, "gps_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
 }
+gps <- gps_5min %>% select(userId, bucket_5min, longitude_mean, latitude_mean)
+gps <- gps %>%
+  filter(
+    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
+  )
+
+if (!exists("myair_5min", inherits = FALSE)) {
+  myair_5min <- read_csv(
+    file.path(cfg$data_dir, "myair_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+air <- myair_5min %>%
+  select(
+    userId, bucket_5min, pm1_mean, pm25_mean, pm10_mean, temperature_mean, humidity_mean,
+    pressure_mean, sound_mean, uvb_mean, light_mean
+  )
+air <- air %>%
+  filter(
+    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
+  )
+
+if (!exists("smartwatchhigh_5min", inherits = FALSE)) {
+  smartwatchhigh_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+smartwatch_high <- smartwatchhigh_5min %>% select(userId, bucket_5min, heartrate_mean, oxygens_mean, breathrate_mean)
+smartwatch_high <- smartwatch_high %>%
+  filter(
+    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
+  )
+
+if (!exists("smartwatchlow_5min", inherits = FALSE)) {
+  smartwatchlow_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+smartwatch_low <- smartwatchlow_5min %>%
+  select(
+    userId, bucket_5min, step_mean, cal_mean, bphigh_mean, bplow_mean, bodytemp_mean, skintemp_mean
+  )
+smartwatch_low <- smartwatch_low %>%
+  filter(
+    as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+    as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
+  )
+
 ```
 
 ## Overlap dataset
 
-The four sets are joined without discarding buckets that occur in only one stream. Missing membership flags are replaced by `FALSE`, so every row describes the complete availability pattern for one participant-bucket.
+Full joins retain buckets observed in only one stream; absent streams are marked `FALSE`.
 
 ```{r}
 overlap <- gps %>%
@@ -158,14 +143,9 @@ overlap <- gps %>%
 
 rm(gps, air, smartwatch_high, smartwatch_low)
 
-if (anyDuplicated(overlap[c("userId", "bucket_5min")]) > 0) {
-  stop("The combined overlap dataset contains duplicated participant-bucket keys.")
-}
 ```
 
 ## Stream totals
-
-The total for each stream is the denominator used to interpret the pairwise intersections. A participant contributes at most once per stream and five-minute bucket.
 
 ```{r}
 stream_summary <- tibble(
@@ -192,7 +172,7 @@ stream_summary %>%
 
 ## Pairwise intersections
 
-The diagonal contains the total number of buckets in each stream. Every off-diagonal cell contains the number of participant-buckets shared by the corresponding pair. A bucket available in three or four streams contributes to multiple pairwise cells.
+The diagonal gives stream totals; other cells count shared participant-buckets. A bucket may contribute to several pairs.
 
 ```{r}
 stream_levels <- c("GPS", "Environment", "Smartwatch high frequency", "Smartwatch low frequency")
@@ -240,7 +220,7 @@ pairwise_overlap %>%
 
 ### Unique stream pairs
 
-The percentage uses the smaller stream as denominator. It answers what proportion of the maximum possible pairwise overlap was observed, while the bucket count remains the primary result.
+Percentage = shared buckets / total buckets in the smaller stream × 100.
 
 ```{r}
 pairwise_table <- pairwise_overlap %>%
@@ -275,7 +255,7 @@ pairwise_table %>%
 
 ## Exact intersection patterns
 
-Unlike the pairwise matrix, the exact combinations partition the union: each participant-bucket appears in one bar only. For example, a bucket labelled “Environment + Smartwatch high frequency” has those two streams and neither GPS nor smartwatch low-frequency data.
+Exact combinations are exclusive: each participant-bucket belongs to one bar.
 
 ```{r}
 intersection_summary <- overlap %>%
@@ -318,7 +298,7 @@ intersection_summary %>%
 
 ## Variable-level availability
 
-A variable is available when its value is non-missing in a participant-bucket. GPS position requires both longitude and latitude. The selected variables cover location, the main environmental measurements and the physiological or activity measurements currently used in the exploratory analyses.
+Availability means non-missing values; GPS position requires both coordinates.
 
 ```{r}
 variable_metadata <- tribble(
@@ -340,8 +320,8 @@ variable_metadata <- tribble(
   "calories", "Calories", "Smartwatch low frequency",
   "systolic_blood_pressure", "Systolic blood pressure", "Smartwatch low frequency",
   "diastolic_blood_pressure", "Diastolic blood pressure", "Smartwatch low frequency",
-  "body_temperature", "Body temperature", "Smartwatch low frequency",
-  "skin_temperature", "Skin temperature", "Smartwatch low frequency"
+  "body_temperature", "bodytemp (sensor scale)", "Smartwatch low frequency",
+  "skin_temperature", "skintemp (sensor scale)", "Smartwatch low frequency"
 ) %>%
   mutate(
     origin = factor(origin, levels = stream_levels),
@@ -370,7 +350,7 @@ variable_summary %>%
 
 ## Pairwise variable co-occurrence
 
-The variable-level tile counts participant-buckets in which both values are available. Facet strips identify the origin of the variables and separate the matrix into source blocks. Labels use compact `K` and `M` notation to remain readable; the colour scale and underlying counts retain the absolute bucket numbers.
+Facets identify variable origin; labels use K (thousands) and M (millions).
 
 ```{r}
 pairwise_variable_matrix <- crossprod(variable_matrix)
@@ -439,7 +419,7 @@ pairwise_variable_overlap %>%
 
 ## Variable UpSet plot
 
-The UpSet plot is produced with `ComplexUpset` and shows the 20 most frequent exclusive availability patterns among the selected variables. Before plotting, millions of participant-buckets are collapsed into their distinct Boolean patterns and the original bucket count is retained as a weight. All patterns are ranked, but ComplexUpset receives only the displayed rows, while the bars still report absolute participant-bucket counts. This avoids the package's costly expansion of manually specified intersections across 19 sets. Variable labels use the prefixes `GPS`, `ENV`, `SWH` and `SWL` to retain their source.
+`ComplexUpset` shows the `r cfg$upset_top_intersections` most frequent exclusive patterns. Identical patterns are collapsed and weighted by their bucket counts to limit memory use; ranking uses all patterns. Prefixes identify source: GPS, ENV, SWH and SWL.
 
 ```{r}
 pattern_code <- as.integer(drop(variable_matrix %*% bitwShiftL(1L, seq_along(variable_names) - 1L)))
@@ -500,4 +480,4 @@ upset(
 
 ## Interpretation boundaries
 
-The pairwise counts describe the available sample size for analyses that combine two data streams or variables. They do not imply a statistical association, and repeated buckets from the same participant are not independent observations. Variable availability is based on non-missing values; analysis-specific validity rules may reduce the usable sample further.
+Overlap gives available sample size, not association or measurement validity. Repeated buckets within participants are not independent.

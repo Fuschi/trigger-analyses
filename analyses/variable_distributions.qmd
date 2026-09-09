@@ -24,13 +24,13 @@ theme_set(theme_minimal(base_size = 12))
 
 ## Aim
 
-This exploratory report describes the marginal distribution of each non-identifying sensor measurement available at five-minute resolution. Every row contributes at most once per participant, variable and UTC five-minute bucket.
+Distributions use one bucket mean per participant and variable at five-minute resolution.
 
-For variables represented by several aggregation columns, the bucket mean is used. `step_mean` and `cal_mean` are retained because their raw values are repeated within a bucket; summing those repetitions would overstate activity. Technical fields, raw-reading counts and within-bucket minima and maxima are not treated as separate variables.
+`step_mean` and `cal_mean` average repeated readings rather than summing them. Technical fields, counts and extrema are excluded as separate variables.
 
-Longitude and latitude are intentionally excluded from the version-controlled report because even aggregate spatial distributions could disclose sensitive locations. GPS accuracy is retained as a non-spatial quality measurement. Sleep state is presented separately because the five-minute table stores counts for state codes rather than one continuous value.
+Coordinates are excluded to protect locations; GPS accuracy is retained. Sleep-state counts are shown separately.
 
-No measurement-validity filter is applied. This is intentional: implausible values and extreme tails are part of the exploratory result. Histograms show the central 1st–99th percentile range for readability, while the summary table retains the full minimum and maximum.
+No additional validity filter is applied. Histograms display the 1st–99th percentiles for readability; summaries retain the full range.
 
 ## Variable definitions
 
@@ -50,50 +50,48 @@ variable_metadata <- tribble(
   "Environment", "temperature_mean", "Air temperature", "°C",
   "Environment", "humidity_mean", "Relative humidity", "%",
   "Environment", "pressure_mean", "Air pressure", "hPa",
-  "Environment", "sound_mean", "Sound", "dB",
+  "Environment", "sound_mean", "Sound", "sensor units",
   "Environment", "uvb_mean", "UVB", "sensor units",
-  "Environment", "light_mean", "Light", "lux",
+  "Environment", "light_mean", "Light", "sensor units",
   "Smartwatch high frequency", "heartrate_mean", "Heart rate", "bpm",
   "Smartwatch high frequency", "oxygens_mean", "Oxygen saturation", "%",
   "Smartwatch high frequency", "breathrate_mean", "Breathing rate", "breaths/min",
   "Smartwatch low frequency", "step_mean", "Steps", "steps/5 min",
-  "Smartwatch low frequency", "cal_mean", "Calories", "kcal/5 min",
+  "Smartwatch low frequency", "cal_mean", "Calories", "sensor units",
   "Smartwatch low frequency", "bphigh_mean", "Systolic blood pressure", "mmHg",
   "Smartwatch low frequency", "bplow_mean", "Diastolic blood pressure", "mmHg",
-  "Smartwatch low frequency", "bodytemp_mean", "Body temperature", "°C",
-  "Smartwatch low frequency", "skintemp_mean", "Skin temperature", "°C"
+  "Smartwatch low frequency", "bodytemp_mean", "bodytemp", "sensor units",
+  "Smartwatch low frequency", "skintemp_mean", "skintemp", "sensor units"
 )
 
 stream_levels <- c("GPS", "Environment", "Smartwatch high frequency", "Smartwatch low frequency")
 ```
 
-The particle-count measurements are cumulative counts above the stated size threshold. Their physical normalization is not encoded in the local table, so they are conservatively labelled as sensor counts rather than assigning an undocumented unit.
+Particle counts are cumulative above each size threshold; physical normalization is undocumented. Sensor-unit labels preserve unresolved scales.
 
 ## Data preparation
 
-Each table is processed separately and released from memory after its summaries and histogram bins have been calculated. Rows with missing analytical keys, records outside the shared date window and every row belonging to a duplicated participant-bucket key are excluded.
+Study window: `2025-03-01 < date < Sys.Date()` (UTC).
 
 ### GPS accuracy
 
 ```{r, message=FALSE}
 gps_variables <- variable_metadata %>% filter(data_stream == "GPS") %>% pull(source_variable)
 
-gps <- read_csv(
-  file.path(cfg$data_dir, "gps_5min.csv.gz"),
-  col_select = c(userId, bucket_5min, all_of(gps_variables)),
-  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
-  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
-) %>%
+if (!exists("gps_5min", inherits = FALSE)) {
+  gps_5min <- read_csv(
+    file.path(cfg$data_dir, "gps_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+gps <- gps_5min %>% select(userId, bucket_5min, all_of(gps_variables))
+gps <- gps %>%
   filter(
-    !is.na(userId), !is.na(bucket_5min),
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 
-if (nrow(gps) == 0) stop("No GPS five-minute buckets remain after applying the shared inclusion rules.")
 
 gps_results <- map(gps_variables, \(variable_name) {
   values <- gps[[variable_name]]
@@ -152,22 +150,20 @@ invisible(gc())
 ```{r, message=FALSE}
 air_variables <- variable_metadata %>% filter(data_stream == "Environment") %>% pull(source_variable)
 
-air <- read_csv(
-  file.path(cfg$data_dir, "myair_5min.csv.gz"),
-  col_select = c(userId, bucket_5min, all_of(air_variables)),
-  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
-  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
-) %>%
+if (!exists("myair_5min", inherits = FALSE)) {
+  myair_5min <- read_csv(
+    file.path(cfg$data_dir, "myair_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+air <- myair_5min %>% select(userId, bucket_5min, all_of(air_variables))
+air <- air %>%
   filter(
-    !is.na(userId), !is.na(bucket_5min),
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 
-if (nrow(air) == 0) stop("No environmental five-minute buckets remain after applying the shared inclusion rules.")
 
 air_results <- map(air_variables, \(variable_name) {
   values <- air[[variable_name]]
@@ -228,27 +224,24 @@ smartwatch_high_variables <- variable_metadata %>%
   filter(data_stream == "Smartwatch high frequency") %>%
   pull(source_variable)
 
-smartwatch_high <- read_csv(
-  file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
-  col_select = c(
-    userId, bucket_5min, all_of(smartwatch_high_variables),
-    sleeprate_1_n, sleeprate_2_n, sleeprate_3_n, sleeprate_4_n
-  ),
-  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
-  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
-) %>%
+if (!exists("smartwatchhigh_5min", inherits = FALSE)) {
+  smartwatchhigh_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+smartwatch_high <- smartwatchhigh_5min %>%
+  select(
+    userId, bucket_5min, all_of(smartwatch_high_variables), sleeprate_0_n, sleeprate_1_n,
+    sleeprate_2_n, sleeprate_3_n, sleeprate_4_n
+  )
+smartwatch_high <- smartwatch_high %>%
   filter(
-    !is.na(userId), !is.na(bucket_5min),
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 
-if (nrow(smartwatch_high) == 0) {
-  stop("No high-frequency smartwatch buckets remain after applying the shared inclusion rules.")
-}
 
 smartwatch_high_results <- map(smartwatch_high_variables, \(variable_name) {
   values <- smartwatch_high[[variable_name]]
@@ -300,7 +293,7 @@ smartwatch_high_summary <- bind_rows(map(smartwatch_high_results, "summary"))
 smartwatch_high_histograms <- bind_rows(map(smartwatch_high_results, "histogram"))
 
 sleep_state_flags <- smartwatch_high %>%
-  transmute(across(sleeprate_1_n:sleeprate_4_n, ~ replace_na(.x, 0) > 0))
+  transmute(across(sleeprate_0_n:sleeprate_4_n, ~ replace_na(.x, 0) > 0))
 sleep_buckets_with_state <- sum(rowSums(sleep_state_flags) > 0)
 sleep_buckets_with_multiple_states <- sum(rowSums(sleep_state_flags) > 1)
 sleep_state_summary <- sleep_state_flags %>%
@@ -308,7 +301,7 @@ sleep_state_summary <- sleep_state_flags %>%
   pivot_longer(everything(), names_to = "state", values_to = "observed_5min_buckets") %>%
   mutate(
     state = recode(
-      state, sleeprate_1_n = "State 1", sleeprate_2_n = "State 2",
+      state, sleeprate_0_n = "State 0", sleeprate_1_n = "State 1", sleeprate_2_n = "State 2",
       sleeprate_3_n = "State 3", sleeprate_4_n = "State 4"
     ),
     percent_of_buckets_with_sleep_state = 100 * observed_5min_buckets / sleep_buckets_with_state
@@ -325,24 +318,20 @@ smartwatch_low_variables <- variable_metadata %>%
   filter(data_stream == "Smartwatch low frequency") %>%
   pull(source_variable)
 
-smartwatch_low <- read_csv(
-  file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
-  col_select = c(userId, bucket_5min, all_of(smartwatch_low_variables)),
-  col_types = cols(userId = col_character(), bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")),
-  locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
-) %>%
+if (!exists("smartwatchlow_5min", inherits = FALSE)) {
+  smartwatchlow_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+smartwatch_low <- smartwatchlow_5min %>% select(userId, bucket_5min, all_of(smartwatch_low_variables))
+smartwatch_low <- smartwatch_low %>%
   filter(
-    !is.na(userId), !is.na(bucket_5min),
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 
-if (nrow(smartwatch_low) == 0) {
-  stop("No low-frequency smartwatch buckets remain after applying the shared inclusion rules.")
-}
 
 smartwatch_low_results <- map(smartwatch_low_variables, \(variable_name) {
   values <- smartwatch_low[[variable_name]]
@@ -398,7 +387,7 @@ invisible(gc())
 
 ## Distribution summary
 
-`Observed 5-minute buckets` is the number of finite values contributing to each distribution. Missing and non-finite percentages use all retained rows in the corresponding source table as denominator. The histograms are pooled across participants, so participants with more observed buckets contribute more strongly to their shape.
+Observed buckets count finite values. Missing/non-finite percentages use all retained source rows; pooled histograms give more influence to participants with more buckets.
 
 ```{r}
 continuous_summary <- bind_rows(
@@ -512,7 +501,7 @@ distribution_histograms %>%
 
 ### Sleep-state presence
 
-The source stores the number of raw observations assigned to state codes 1–4 within each bucket. The plot therefore reports how many five-minute buckets contain each state at least once. A bucket may contain more than one state during a transition, so the four bars are not mutually exclusive.
+Each state code (0–4) counts once per bucket when present. Bars are not exclusive: one bucket may contain several states. Clinical stage labels are not assigned.
 
 ```{r}
 tibble(
@@ -573,4 +562,4 @@ distribution_histograms %>%
 
 ## Interpretation boundaries
 
-These are pooled marginal distributions, not participant-balanced estimates and not formal statistical inference. Repeated buckets from the same participant are not independent. Peaks may reflect true behaviour, device rounding, repeated values or sensor limits; extreme minima and maxima may be valid measurements or data-quality problems. Variable-specific validity rules should be defined only after inspecting these results and the sensor documentation.
+Distributions are descriptive, not participant-balanced estimates. Repeated buckets are dependent, and extreme values are not automatically invalid.

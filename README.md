@@ -17,6 +17,10 @@ The five-minute bucket is the common temporal unit used across data streams. For
 
 Unless an analysis explicitly defines a different period, only records with a date strictly after 2025-03-01 and strictly before the current date are included. Earlier records belong to the testing phase, while the current day may still be incomplete.
 
+Technical cleaning and key uniqueness belong to the upstream ETL; notebooks use the tables without structural checks or deduplication. Study dates, exploratory thresholds and model-specific inclusion rules remain analysis decisions.
+
+Each notebook imports complete tables under their original names (e.g. `myair_5min`) only if absent from the current R environment. Analysis objects are selected and filtered separately. After refreshing a dump, remove its object (e.g. `rm(myair_5min)`) to reload it on the next run. Reuse applies within one R session, not across separate Quarto renders; keeping full tables in memory increases RAM use.
+
 ## Project structure
 
 ``` text

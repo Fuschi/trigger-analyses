@@ -20,70 +20,57 @@ cfg <- list(
 
 ## Data import
 
-The five-minute tables are read using `userId` and `bucket_5min` as analytical keys. Only buckets whose UTC date is strictly after 1 March 2025 and strictly before the current date are retained.
-
-Each available bucket counts once, irrespective of the number of raw measurements produced inside the five-minute interval.
-
-Rows associated with duplicated analytical keys are removed completely.
+Study window: `2025-03-01 < date < Sys.Date()` (UTC), with one row per `userId` and `bucket_5min`.
 
 ```{r, message=FALSE}
-air <- read_csv(
-  file.path(cfg$data_dir, "myair_5min.csv.gz"),
-  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
-  col_types = cols(
-    userId = col_character(),
-    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
-  ),
-  show_col_types = FALSE
-) %>%
+if (!exists("myair_5min", inherits = FALSE)) {
+  myair_5min <- read_csv(
+    file.path(cfg$data_dir, "myair_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+air <- myair_5min
+air <- air %>%
   filter(
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 
-swh <- read_csv(
-  file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
-  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
-  col_types = cols(
-    userId = col_character(),
-    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
-  ),
-  show_col_types = FALSE
-) %>%
+if (!exists("smartwatchhigh_5min", inherits = FALSE)) {
+  smartwatchhigh_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+swh <- smartwatchhigh_5min
+swh <- swh %>%
   filter(
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 
-swl <- read_csv(
-  file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
-  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
-  col_types = cols(
-    userId = col_character(),
-    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
-  ),
-  show_col_types = FALSE
-) %>%
+if (!exists("smartwatchlow_5min", inherits = FALSE)) {
+  smartwatchlow_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+swl <- smartwatchlow_5min
+swl <- swl %>%
   filter(
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 ```
 
 ## Dataset construction
 
-Environmental, physiological and activity measurements are joined using `userId` and the five-minute time bucket.
+Measurements are matched by `userId` and `bucket_5min`.
 
-For steps, `step_mean` is used instead of `step_sum`, because the same step value is repeated in the raw observations within each bucket.
+`step_mean` averages repeated minute readings. `bodytemp` and `skintemp` retain their unresolved sensor scales.
 
 ```{r}
 dat <- full_join(
@@ -150,10 +137,7 @@ dat <- full_join(
 
 ## Particle quality control
 
-Particle counts are cumulative above increasing size thresholds and should be
-monotonically decreasing. The same exploratory particulate-mass threshold used
-in `particle_quality_control.qmd` is applied here. When either check fails,
-the complete particle block is set to missing.
+All PM/PC values in a bucket are masked if cumulative counts violate size ordering or PM exceeds `r cfg$particle_mass_max` µg/m³. This exploratory threshold requires sensor validation; see [particle screening](particle_quality_control.html).
 
 ```{r}
 dat <- dat %>%
@@ -189,6 +173,12 @@ dat <- dat %>%
     pc5 = if_else(invalid_particles, NA_real_, pc5),
     pc10 = if_else(invalid_particles, NA_real_, pc10)
   )
+```
+
+```{r}
+dat %>%
+  summarise(participant_buckets = n(), participants = n_distinct(userId), particle_order_flags = sum(invalid_particle_order), particle_mass_flags = sum(invalid_particle_mass), particle_blocks_masked = sum(invalid_particles)) %>%
+  knitr::kable(format = "pipe", big.mark = ",", caption = "Dataset coverage and additional exploratory particle screening")
 ```
 
 ## Derived variables
@@ -245,10 +235,7 @@ dat <- dat %>%
 
 ## Exposure-response hexplots
 
-The plots involving particulate matter use the exploratory quality-control rule
-defined above. The threshold should be validated against the sensor
-specification before formal inference. Particulate matter, UVB, and light use a
-`log1p` horizontal scale; all other axes retain their original units.
+PM, UVB and light use `log1p` horizontal scales.
 
 ### Steps and heart rate
 
@@ -342,7 +329,7 @@ dat %>%
   theme_minimal()
 ```
 
-### Temperature and skin temperature
+### Temperature and skintemp
 
 ```{r, fig.width=10, fig.height=6.5}
 dat %>%
@@ -357,15 +344,15 @@ dat %>%
     name = "Observations\n(log10 scale)"
   ) +
   labs(
-    title = "Temperature and skin temperature",
+    title = "Temperature and skintemp",
     subtitle = "Five-minute observations",
     x = "Temperature (°C)",
-    y = "Skin temperature relative to personal mean (°C)"
+    y = "skintemp relative to personal mean (sensor units)"
   ) +
   theme_minimal()
 ```
 
-### Humidex and skin temperature
+### Humidex and skintemp
 
 ```{r, fig.width=10, fig.height=6.5}
 dat %>%
@@ -380,10 +367,10 @@ dat %>%
     name = "Observations\n(log10 scale)"
   ) +
   labs(
-    title = "Humidex and skin temperature",
+    title = "Humidex and skintemp",
     subtitle = "Five-minute observations",
     x = "Humidex",
-    y = "Skin temperature relative to personal mean (°C)"
+    y = "skintemp relative to personal mean (sensor units)"
   ) +
   theme_minimal()
 ```
@@ -553,7 +540,7 @@ dat %>%
   theme_minimal()
 ```
 
-### Light and skin temperature
+### Light and skintemp
 
 ```{r, fig.width=10, fig.height=6.5}
 dat %>%
@@ -569,10 +556,10 @@ dat %>%
     name = "Observations\n(log10 scale)"
   ) +
   labs(
-    title = "Light and skin temperature",
+    title = "Light and skintemp",
     subtitle = "Five-minute observations",
     x = "Light",
-    y = "Skin temperature relative to personal mean (°C)"
+    y = "skintemp relative to personal mean (sensor units)"
   ) +
   theme_minimal()
 ```

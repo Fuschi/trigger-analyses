@@ -2209,12 +2209,10 @@ vertical-align: -.125em;
    
   <ul>
   <li><a href="#setup" id="toc-setup" class="nav-link active" data-scroll-target="#setup">Setup</a></li>
-  <li><a href="#aim" id="toc-aim" class="nav-link" data-scroll-target="#aim">Aim</a></li>
-  <li><a href="#daily-and-sleep-tables" id="toc-daily-and-sleep-tables" class="nav-link" data-scroll-target="#daily-and-sleep-tables">Daily and sleep tables</a></li>
-  <li><a href="#five-minute-tables" id="toc-five-minute-tables" class="nav-link" data-scroll-target="#five-minute-tables">Five-minute tables</a></li>
-  <li><a href="#date-window-summary" id="toc-date-window-summary" class="nav-link" data-scroll-target="#date-window-summary">Date-window summary</a></li>
-  <li><a href="#duplicate-analytical-keys" id="toc-duplicate-analytical-keys" class="nav-link" data-scroll-target="#duplicate-analytical-keys">Duplicate analytical keys</a></li>
-  <li><a href="#interpretation" id="toc-interpretation" class="nav-link" data-scroll-target="#interpretation">Interpretation</a></li>
+  <li><a href="#scope" id="toc-scope" class="nav-link" data-scroll-target="#scope">Scope</a></li>
+  <li><a href="#data-import" id="toc-data-import" class="nav-link" data-scroll-target="#data-import">Data import</a></li>
+  <li><a href="#study-date-window" id="toc-study-date-window" class="nav-link" data-scroll-target="#study-date-window">Study date window</a></li>
+  <li><a href="#smartwatch-firmware-provenance" id="toc-smartwatch-firmware-provenance" class="nav-link" data-scroll-target="#smartwatch-firmware-provenance">Smartwatch firmware provenance</a></li>
   </ul>
 </nav>
 </div>
@@ -2248,261 +2246,145 @@ vertical-align: -.125em;
 <section id="setup" class="level2">
 <h2 class="anchored" data-anchor-id="setup">Setup</h2>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>cfg <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">daily_dir =</span> <span class="fu">file.path</span>(<span class="st">&quot;data&quot;</span>, <span class="st">&quot;daily&quot;</span>),</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">five_min_dir =</span> <span class="fu">file.path</span>(<span class="st">&quot;data&quot;</span>, <span class="st">&quot;5min&quot;</span>),</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">tidy_dir =</span> <span class="fu">file.path</span>(<span class="st">&quot;data&quot;</span>, <span class="st">&quot;tidy&quot;</span>),</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">analysis_start_date =</span> <span class="fu">as.Date</span>(<span class="st">&quot;2025-03-01&quot;</span>),</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">timezone =</span> <span class="st">&quot;UTC&quot;</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in system(&quot;timedatectl&quot;, intern = TRUE): running command &#39;timedatectl&#39;
+had status 1</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>cfg <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">daily_dir =</span> <span class="fu">file.path</span>(<span class="st">&quot;data&quot;</span>, <span class="st">&quot;daily&quot;</span>),</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">five_min_dir =</span> <span class="fu">file.path</span>(<span class="st">&quot;data&quot;</span>, <span class="st">&quot;5min&quot;</span>),</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">tidy_dir =</span> <span class="fu">file.path</span>(<span class="st">&quot;data&quot;</span>, <span class="st">&quot;tidy&quot;</span>),</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">analysis_start_date =</span> <span class="fu">as.Date</span>(<span class="st">&quot;2025-03-01&quot;</span>),</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">timezone =</span> <span class="st">&quot;UTC&quot;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
-<section id="aim" class="level2">
-<h2 class="anchored" data-anchor-id="aim">Aim</h2>
-<p>This report centralises structural checks that are common to the analyses. It counts missing temporal keys, records on or before 1 March 2025, records from the current date or later, and duplicated analytical keys within the retained date window.</p>
-<p>Daily tables use <code>userId</code> and <code>date</code> as their analytical key. Five-minute tables use <code>userId</code> and <code>bucket_5min</code>. The duplicate summary reports only aggregate counts and never displays participant identifiers. All rows belonging to duplicated keys are excluded from downstream analyses when their origin cannot be resolved unambiguously.</p>
-<p>These checks describe table structure rather than the validity of individual measurements. The report reads local data without modifying it.</p>
+<section id="scope" class="level2">
+<h2 class="anchored" data-anchor-id="scope">Scope</h2>
+<p>Descriptive summaries of the study date window and smartwatch firmware availability.</p>
 </section>
-<section id="daily-and-sleep-tables" class="level2">
-<h2 class="anchored" data-anchor-id="daily-and-sleep-tables">Daily and sleep tables</h2>
-<p>Only the columns needed to inspect analytical keys are imported.</p>
+<section id="data-import" class="level2">
+<h2 class="anchored" data-anchor-id="data-import">Data import</h2>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>daily_keys <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">read_csv</span>(</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>daily_dir, <span class="st">&quot;gps_daily.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, date),</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>()),</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">data_table =</span> <span class="st">&quot;gps_daily&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;Daily&quot;</span>),</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">read_csv</span>(</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>daily_dir, <span class="st">&quot;myair_daily.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, date),</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>()),</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">data_table =</span> <span class="st">&quot;myair_daily&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;Daily&quot;</span>),</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">read_csv</span>(</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>daily_dir, <span class="st">&quot;smartwatchhigh_daily.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, date),</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>()),</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">data_table =</span> <span class="st">&quot;smartwatchhigh_daily&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;Daily&quot;</span>),</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">read_csv</span>(</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>daily_dir, <span class="st">&quot;smartwatchlow_daily.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, date),</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>()),</span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">data_table =</span> <span class="st">&quot;smartwatchlow_daily&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;Daily&quot;</span>),</span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">read_csv</span>(</span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>tidy_dir, <span class="st">&quot;sleep_tidy.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, date),</span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>()),</span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">data_table =</span> <span class="st">&quot;sleep_tidy&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;Participant-night&quot;</span>)</span>
-<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>daily_date_summary <span class="ot">&lt;-</span> daily_keys <span class="sc">%&gt;%</span></span>
-<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(data_table, resolution) <span class="sc">%&gt;%</span></span>
-<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">rows =</span> <span class="fu">n</span>(), <span class="at">missing_user_ids =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(userId)), <span class="at">missing_dates =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(date)),</span>
-<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">on_or_before_start =</span> <span class="fu">sum</span>(date <span class="sc">&lt;=</span> cfg<span class="sc">$</span>analysis_start_date, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">within_window =</span> <span class="fu">sum</span>(date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date <span class="sc">&amp;</span> date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">today_or_later =</span> <span class="fu">sum</span>(date <span class="sc">&gt;=</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span></span>
-<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>daily_retained_rows <span class="ot">&lt;-</span> daily_keys <span class="sc">%&gt;%</span></span>
-<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(date), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(data_table, resolution, <span class="at">name =</span> <span class="st">&quot;retained_rows&quot;</span>)</span>
-<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-42"><a href="#cb2-42" aria-hidden="true" tabindex="-1"></a>daily_duplicate_summary <span class="ot">&lt;-</span> daily_keys <span class="sc">%&gt;%</span></span>
-<span id="cb2-43"><a href="#cb2-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(date), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb2-44"><a href="#cb2-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(data_table, resolution, userId, date, <span class="at">name =</span> <span class="st">&quot;key_n&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(key_n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb2-46"><a href="#cb2-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(data_table, resolution) <span class="sc">%&gt;%</span></span>
-<span id="cb2-47"><a href="#cb2-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">duplicated_keys =</span> <span class="fu">n</span>(), <span class="at">rows_involved =</span> <span class="fu">sum</span>(key_n), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb2-48"><a href="#cb2-48" aria-hidden="true" tabindex="-1"></a>  <span class="fu">right_join</span>(daily_retained_rows, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;data_table&quot;</span>, <span class="st">&quot;resolution&quot;</span>), <span class="at">relationship =</span> <span class="st">&quot;one-to-one&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb2-49"><a href="#cb2-49" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb2-50"><a href="#cb2-50" aria-hidden="true" tabindex="-1"></a>    <span class="at">duplicated_keys =</span> <span class="fu">replace_na</span>(duplicated_keys, <span class="dv">0</span>L), <span class="at">rows_involved =</span> <span class="fu">replace_na</span>(rows_involved, <span class="dv">0</span>L),</span>
-<span id="cb2-51"><a href="#cb2-51" aria-hidden="true" tabindex="-1"></a>    <span class="at">percent_rows_involved =</span> <span class="dv">100</span> <span class="sc">*</span> rows_involved <span class="sc">/</span> retained_rows</span>
-<span id="cb2-52"><a href="#cb2-52" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb2-53"><a href="#cb2-53" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-54"><a href="#cb2-54" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(daily_keys, daily_retained_rows)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-</section>
-<section id="five-minute-tables" class="level2">
-<h2 class="anchored" data-anchor-id="five-minute-tables">Five-minute tables</h2>
-<p>The same checks are repeated on the canonical five-minute tables. Timestamps are interpreted in UTC, consistently with the high-resolution analyses. Tables are processed one at a time to keep memory use limited.</p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>gps_5min <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(cfg<span class="sc">$</span>five_min_dir, <span class="st">&quot;gps_5min.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, bucket_5min),</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">bucket_5min =</span> <span class="fu">col_datetime</span>(<span class="at">format =</span> <span class="st">&quot;%Y-%m-%d %H:%M:%S&quot;</span>)),</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> cfg<span class="sc">$</span>timezone), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">date =</span> <span class="fu">as.Date</span>(bucket_5min, <span class="at">tz =</span> cfg<span class="sc">$</span>timezone))</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>gps_5min_date_summary <span class="ot">&lt;-</span> gps_5min <span class="sc">%&gt;%</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">data_table =</span> <span class="st">&quot;gps_5min&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;5 minutes&quot;</span>, <span class="at">rows =</span> <span class="fu">n</span>(),</span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">missing_user_ids =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(userId)), <span class="at">missing_dates =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(bucket_5min)),</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">on_or_before_start =</span> <span class="fu">sum</span>(date <span class="sc">&lt;=</span> cfg<span class="sc">$</span>analysis_start_date, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">within_window =</span> <span class="fu">sum</span>(date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date <span class="sc">&amp;</span> date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">today_or_later =</span> <span class="fu">sum</span>(date <span class="sc">&gt;=</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>gps_5min_retained_rows <span class="ot">&lt;-</span> gps_5min <span class="sc">%&gt;%</span></span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(bucket_5min), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">retained_rows =</span> <span class="fu">n</span>()) <span class="sc">%&gt;%</span> <span class="fu">pull</span>()</span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>gps_5min_duplicate_summary <span class="ot">&lt;-</span> gps_5min <span class="sc">%&gt;%</span></span>
-<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(bucket_5min), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(userId, bucket_5min, <span class="at">name =</span> <span class="st">&quot;key_n&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(key_n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">duplicated_keys =</span> <span class="fu">n</span>(), <span class="at">rows_involved =</span> <span class="fu">sum</span>(key_n)) <span class="sc">%&gt;%</span></span>
-<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">data_table =</span> <span class="st">&quot;gps_5min&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;5 minutes&quot;</span>, <span class="at">retained_rows =</span> gps_5min_retained_rows,</span>
-<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">percent_rows_involved =</span> <span class="dv">100</span> <span class="sc">*</span> rows_involved <span class="sc">/</span> retained_rows</span>
-<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(data_table, resolution, duplicated_keys, rows_involved, retained_rows, percent_rows_involved)</span>
-<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(gps_5min, gps_5min_retained_rows)</span>
-<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a><span class="fu">invisible</span>(<span class="fu">gc</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>myair_5min <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(cfg<span class="sc">$</span>five_min_dir, <span class="st">&quot;myair_5min.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, bucket_5min),</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">bucket_5min =</span> <span class="fu">col_datetime</span>(<span class="at">format =</span> <span class="st">&quot;%Y-%m-%d %H:%M:%S&quot;</span>)),</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> cfg<span class="sc">$</span>timezone), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">date =</span> <span class="fu">as.Date</span>(bucket_5min, <span class="at">tz =</span> cfg<span class="sc">$</span>timezone))</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>myair_5min_date_summary <span class="ot">&lt;-</span> myair_5min <span class="sc">%&gt;%</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">data_table =</span> <span class="st">&quot;myair_5min&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;5 minutes&quot;</span>, <span class="at">rows =</span> <span class="fu">n</span>(),</span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">missing_user_ids =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(userId)), <span class="at">missing_dates =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(bucket_5min)),</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">on_or_before_start =</span> <span class="fu">sum</span>(date <span class="sc">&lt;=</span> cfg<span class="sc">$</span>analysis_start_date, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">within_window =</span> <span class="fu">sum</span>(date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date <span class="sc">&amp;</span> date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">today_or_later =</span> <span class="fu">sum</span>(date <span class="sc">&gt;=</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;gps_daily&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  gps_daily <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>daily_dir, <span class="st">&quot;gps_daily.csv.gz&quot;</span>),</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>(), <span class="at">deviceId =</span> <span class="fu">col_character</span>(), <span class="at">firmware =</span> <span class="fu">col_character</span>()),</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;myair_daily&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  myair_daily <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>daily_dir, <span class="st">&quot;myair_daily.csv.gz&quot;</span>),</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>(), <span class="at">deviceId =</span> <span class="fu">col_character</span>(), <span class="at">firmware =</span> <span class="fu">col_character</span>()),</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
 <span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>myair_5min_retained_rows <span class="ot">&lt;-</span> myair_5min <span class="sc">%&gt;%</span></span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(bucket_5min), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">retained_rows =</span> <span class="fu">n</span>()) <span class="sc">%&gt;%</span> <span class="fu">pull</span>()</span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>myair_5min_duplicate_summary <span class="ot">&lt;-</span> myair_5min <span class="sc">%&gt;%</span></span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(bucket_5min), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(userId, bucket_5min, <span class="at">name =</span> <span class="st">&quot;key_n&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(key_n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">duplicated_keys =</span> <span class="fu">n</span>(), <span class="at">rows_involved =</span> <span class="fu">sum</span>(key_n)) <span class="sc">%&gt;%</span></span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">data_table =</span> <span class="st">&quot;myair_5min&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;5 minutes&quot;</span>, <span class="at">retained_rows =</span> myair_5min_retained_rows,</span>
-<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">percent_rows_involved =</span> <span class="dv">100</span> <span class="sc">*</span> rows_involved <span class="sc">/</span> retained_rows</span>
-<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(data_table, resolution, duplicated_keys, rows_involved, retained_rows, percent_rows_involved)</span>
-<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(myair_5min, myair_5min_retained_rows)</span>
-<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a><span class="fu">invisible</span>(<span class="fu">gc</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>smartwatch_high_5min <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(cfg<span class="sc">$</span>five_min_dir, <span class="st">&quot;smartwatchhigh_5min.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, bucket_5min),</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">bucket_5min =</span> <span class="fu">col_datetime</span>(<span class="at">format =</span> <span class="st">&quot;%Y-%m-%d %H:%M:%S&quot;</span>)),</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> cfg<span class="sc">$</span>timezone), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">date =</span> <span class="fu">as.Date</span>(bucket_5min, <span class="at">tz =</span> cfg<span class="sc">$</span>timezone))</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>smartwatch_high_5min_date_summary <span class="ot">&lt;-</span> smartwatch_high_5min <span class="sc">%&gt;%</span></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">data_table =</span> <span class="st">&quot;smartwatchhigh_5min&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;5 minutes&quot;</span>, <span class="at">rows =</span> <span class="fu">n</span>(),</span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">missing_user_ids =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(userId)), <span class="at">missing_dates =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(bucket_5min)),</span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">on_or_before_start =</span> <span class="fu">sum</span>(date <span class="sc">&lt;=</span> cfg<span class="sc">$</span>analysis_start_date, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">within_window =</span> <span class="fu">sum</span>(date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date <span class="sc">&amp;</span> date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">today_or_later =</span> <span class="fu">sum</span>(date <span class="sc">&gt;=</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>smartwatch_high_5min_retained_rows <span class="ot">&lt;-</span> smartwatch_high_5min <span class="sc">%&gt;%</span></span>
-<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(bucket_5min), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">retained_rows =</span> <span class="fu">n</span>()) <span class="sc">%&gt;%</span> <span class="fu">pull</span>()</span>
-<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>smartwatch_high_5min_duplicate_summary <span class="ot">&lt;-</span> smartwatch_high_5min <span class="sc">%&gt;%</span></span>
-<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(bucket_5min), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(userId, bucket_5min, <span class="at">name =</span> <span class="st">&quot;key_n&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(key_n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">duplicated_keys =</span> <span class="fu">n</span>(), <span class="at">rows_involved =</span> <span class="fu">sum</span>(key_n)) <span class="sc">%&gt;%</span></span>
-<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">data_table =</span> <span class="st">&quot;smartwatchhigh_5min&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;5 minutes&quot;</span>, <span class="at">retained_rows =</span> smartwatch_high_5min_retained_rows,</span>
-<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">percent_rows_involved =</span> <span class="dv">100</span> <span class="sc">*</span> rows_involved <span class="sc">/</span> retained_rows</span>
-<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(data_table, resolution, duplicated_keys, rows_involved, retained_rows, percent_rows_involved)</span>
-<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(smartwatch_high_5min, smartwatch_high_5min_retained_rows)</span>
-<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a><span class="fu">invisible</span>(<span class="fu">gc</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>smartwatch_low_5min <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(cfg<span class="sc">$</span>five_min_dir, <span class="st">&quot;smartwatchlow_5min.csv.gz&quot;</span>), <span class="at">col_select =</span> <span class="fu">c</span>(userId, bucket_5min),</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">bucket_5min =</span> <span class="fu">col_datetime</span>(<span class="at">format =</span> <span class="st">&quot;%Y-%m-%d %H:%M:%S&quot;</span>)),</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> cfg<span class="sc">$</span>timezone), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">date =</span> <span class="fu">as.Date</span>(bucket_5min, <span class="at">tz =</span> cfg<span class="sc">$</span>timezone))</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>smartwatch_low_5min_date_summary <span class="ot">&lt;-</span> smartwatch_low_5min <span class="sc">%&gt;%</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">data_table =</span> <span class="st">&quot;smartwatchlow_5min&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;5 minutes&quot;</span>, <span class="at">rows =</span> <span class="fu">n</span>(),</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">missing_user_ids =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(userId)), <span class="at">missing_dates =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(bucket_5min)),</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">on_or_before_start =</span> <span class="fu">sum</span>(date <span class="sc">&lt;=</span> cfg<span class="sc">$</span>analysis_start_date, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">within_window =</span> <span class="fu">sum</span>(date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date <span class="sc">&amp;</span> date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">today_or_later =</span> <span class="fu">sum</span>(date <span class="sc">&gt;=</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>smartwatch_low_5min_retained_rows <span class="ot">&lt;-</span> smartwatch_low_5min <span class="sc">%&gt;%</span></span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(bucket_5min), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">retained_rows =</span> <span class="fu">n</span>()) <span class="sc">%&gt;%</span> <span class="fu">pull</span>()</span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>smartwatch_low_5min_duplicate_summary <span class="ot">&lt;-</span> smartwatch_low_5min <span class="sc">%&gt;%</span></span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(userId), <span class="sc">!</span><span class="fu">is.na</span>(bucket_5min), date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date, date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(userId, bucket_5min, <span class="at">name =</span> <span class="st">&quot;key_n&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(key_n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">duplicated_keys =</span> <span class="fu">n</span>(), <span class="at">rows_involved =</span> <span class="fu">sum</span>(key_n)) <span class="sc">%&gt;%</span></span>
-<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">data_table =</span> <span class="st">&quot;smartwatchlow_5min&quot;</span>, <span class="at">resolution =</span> <span class="st">&quot;5 minutes&quot;</span>, <span class="at">retained_rows =</span> smartwatch_low_5min_retained_rows,</span>
-<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">percent_rows_involved =</span> <span class="dv">100</span> <span class="sc">*</span> rows_involved <span class="sc">/</span> retained_rows</span>
-<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(data_table, resolution, duplicated_keys, rows_involved, retained_rows, percent_rows_involved)</span>
-<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(smartwatch_low_5min, smartwatch_low_5min_retained_rows)</span>
-<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a><span class="fu">invisible</span>(<span class="fu">gc</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;smartwatchhigh_daily&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>  smartwatchhigh_daily <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>daily_dir, <span class="st">&quot;smartwatchhigh_daily.csv.gz&quot;</span>),</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>(), <span class="at">deviceId =</span> <span class="fu">col_character</span>(), <span class="at">firmware =</span> <span class="fu">col_character</span>()),</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;smartwatchlow_daily&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>  smartwatchlow_daily <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>daily_dir, <span class="st">&quot;smartwatchlow_daily.csv.gz&quot;</span>),</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>(), <span class="at">deviceId =</span> <span class="fu">col_character</span>(), <span class="at">firmware =</span> <span class="fu">col_character</span>()),</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;sleep_tidy&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>  sleep_tidy <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>tidy_dir, <span class="st">&quot;sleep_tidy.csv.gz&quot;</span>),</span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">date =</span> <span class="fu">col_date</span>()),</span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;gps_5min&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a>  gps_5min <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-43"><a href="#cb4-43" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>five_min_dir, <span class="st">&quot;gps_5min.csv.gz&quot;</span>),</span>
+<span id="cb4-44"><a href="#cb4-44" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">bucket_5min =</span> <span class="fu">col_datetime</span>(), <span class="at">deviceId =</span> <span class="fu">col_character</span>(), <span class="at">firmware =</span> <span class="fu">col_character</span>()),</span>
+<span id="cb4-45"><a href="#cb4-45" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-46"><a href="#cb4-46" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-47"><a href="#cb4-47" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-48"><a href="#cb4-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-49"><a href="#cb4-49" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;myair_5min&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-50"><a href="#cb4-50" aria-hidden="true" tabindex="-1"></a>  myair_5min <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-51"><a href="#cb4-51" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>five_min_dir, <span class="st">&quot;myair_5min.csv.gz&quot;</span>),</span>
+<span id="cb4-52"><a href="#cb4-52" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">bucket_5min =</span> <span class="fu">col_datetime</span>(), <span class="at">deviceId =</span> <span class="fu">col_character</span>(), <span class="at">firmware =</span> <span class="fu">col_character</span>()),</span>
+<span id="cb4-53"><a href="#cb4-53" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-54"><a href="#cb4-54" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-55"><a href="#cb4-55" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-56"><a href="#cb4-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-57"><a href="#cb4-57" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;smartwatchhigh_5min&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-58"><a href="#cb4-58" aria-hidden="true" tabindex="-1"></a>  smartwatchhigh_5min <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-59"><a href="#cb4-59" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>five_min_dir, <span class="st">&quot;smartwatchhigh_5min.csv.gz&quot;</span>),</span>
+<span id="cb4-60"><a href="#cb4-60" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">bucket_5min =</span> <span class="fu">col_datetime</span>(), <span class="at">deviceId =</span> <span class="fu">col_character</span>(), <span class="at">firmware =</span> <span class="fu">col_character</span>()),</span>
+<span id="cb4-61"><a href="#cb4-61" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-62"><a href="#cb4-62" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-63"><a href="#cb4-63" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-64"><a href="#cb4-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-65"><a href="#cb4-65" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;smartwatchlow_5min&quot;</span>, <span class="at">inherits =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb4-66"><a href="#cb4-66" aria-hidden="true" tabindex="-1"></a>  smartwatchlow_5min <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb4-67"><a href="#cb4-67" aria-hidden="true" tabindex="-1"></a>    <span class="fu">file.path</span>(cfg<span class="sc">$</span>five_min_dir, <span class="st">&quot;smartwatchlow_5min.csv.gz&quot;</span>),</span>
+<span id="cb4-68"><a href="#cb4-68" aria-hidden="true" tabindex="-1"></a>    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">userId =</span> <span class="fu">col_character</span>(), <span class="at">bucket_5min =</span> <span class="fu">col_datetime</span>(), <span class="at">deviceId =</span> <span class="fu">col_character</span>(), <span class="at">firmware =</span> <span class="fu">col_character</span>()),</span>
+<span id="cb4-69"><a href="#cb4-69" aria-hidden="true" tabindex="-1"></a>    <span class="at">locale =</span> <span class="fu">locale</span>(<span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>), <span class="at">na =</span> <span class="fu">c</span>(<span class="st">&quot;&quot;</span>, <span class="st">&quot;NA&quot;</span>, <span class="st">&quot;NULL&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-70"><a href="#cb4-70" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-71"><a href="#cb4-71" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
-<section id="date-window-summary" class="level2">
-<h2 class="anchored" data-anchor-id="date-window-summary">Date-window summary</h2>
-<p>Rows in the analysis window have non-missing temporal keys and satisfy <code>2025-03-01 &lt; date &lt; Sys.Date()</code>. Missing participant identifiers are shown separately and are not eligible for the duplicate-key check.</p>
+<section id="study-date-window" class="level2">
+<h2 class="anchored" data-anchor-id="study-date-window">Study date window</h2>
+<p>Study window: <code>2025-03-01 &lt; date &lt; Sys.Date()</code> (UTC). Counts outside it describe study exclusions, not ETL errors.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>date_summary <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  daily_date_summary, gps_5min_date_summary, myair_5min_date_summary,</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  smartwatch_high_5min_date_summary, smartwatch_low_5min_date_summary</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(<span class="fu">factor</span>(resolution, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;5 minutes&quot;</span>, <span class="st">&quot;Daily&quot;</span>, <span class="st">&quot;Participant-night&quot;</span>)), data_table)</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>date_summary <span class="sc">%&gt;%</span></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(</span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">format =</span> <span class="st">&quot;pipe&quot;</span>, <span class="at">big.mark =</span> <span class="st">&quot;,&quot;</span>,</span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">col.names =</span> <span class="fu">c</span>(</span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Data table&quot;</span>, <span class="st">&quot;Resolution&quot;</span>, <span class="st">&quot;Rows&quot;</span>, <span class="st">&quot;Missing user IDs&quot;</span>, <span class="st">&quot;Missing dates/timestamps&quot;</span>,</span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;On or before start&quot;</span>, <span class="st">&quot;Within window&quot;</span>, <span class="st">&quot;Today or later&quot;</span></span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="fu">paste0</span>(<span class="st">&quot;Date-window checks; retained window: &quot;</span>, cfg<span class="sc">$</span>analysis_start_date, <span class="st">&quot; &lt; date &lt; &quot;</span>, <span class="fu">Sys.Date</span>())</span>
-<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>table_dates <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  gps_daily <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;gps_daily&quot;</span>, <span class="at">date =</span> date),</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  myair_daily <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;myair_daily&quot;</span>, <span class="at">date =</span> date),</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  smartwatchhigh_daily <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;smartwatchhigh_daily&quot;</span>, <span class="at">date =</span> date),</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  smartwatchlow_daily <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;smartwatchlow_daily&quot;</span>, <span class="at">date =</span> date),</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  sleep_tidy <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;sleep_tidy&quot;</span>, <span class="at">date =</span> date),</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  gps_5min <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;gps_5min&quot;</span>, <span class="at">date =</span> <span class="fu">as.Date</span>(bucket_5min, <span class="at">tz =</span> cfg<span class="sc">$</span>timezone)),</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  myair_5min <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;myair_5min&quot;</span>, <span class="at">date =</span> <span class="fu">as.Date</span>(bucket_5min, <span class="at">tz =</span> cfg<span class="sc">$</span>timezone)),</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  smartwatchhigh_5min <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;smartwatchhigh_5min&quot;</span>, <span class="at">date =</span> <span class="fu">as.Date</span>(bucket_5min, <span class="at">tz =</span> cfg<span class="sc">$</span>timezone)),</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  smartwatchlow_5min <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">data_table =</span> <span class="st">&quot;smartwatchlow_5min&quot;</span>, <span class="at">date =</span> <span class="fu">as.Date</span>(bucket_5min, <span class="at">tz =</span> cfg<span class="sc">$</span>timezone))</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>date_summary <span class="ot">&lt;-</span> table_dates <span class="sc">%&gt;%</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(data_table) <span class="sc">%&gt;%</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">rows =</span> <span class="fu">n</span>(),</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">on_or_before_start =</span> <span class="fu">sum</span>(date <span class="sc">&lt;=</span> cfg<span class="sc">$</span>analysis_start_date, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">within_window =</span> <span class="fu">sum</span>(date <span class="sc">&gt;</span> cfg<span class="sc">$</span>analysis_start_date <span class="sc">&amp;</span> date <span class="sc">&lt;</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">today_or_later =</span> <span class="fu">sum</span>(date <span class="sc">&gt;=</span> <span class="fu">Sys.Date</span>(), <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>date_summary <span class="sc">%&gt;%</span></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(</span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">format =</span> <span class="st">&quot;pipe&quot;</span>, <span class="at">big.mark =</span> <span class="st">&quot;,&quot;</span>,</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">&quot;Table&quot;</span>, <span class="st">&quot;Rows&quot;</span>, <span class="st">&quot;On or before start&quot;</span>, <span class="st">&quot;Within window&quot;</span>, <span class="st">&quot;Today or later&quot;</span>),</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="fu">paste0</span>(<span class="st">&quot;Study date window: &quot;</span>, cfg<span class="sc">$</span>analysis_start_date, <span class="st">&quot; &lt; date &lt; &quot;</span>, <span class="fu">Sys.Date</span>())</span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Date-window checks; retained window: 2025-03-01 &lt; date &lt; 2026-08-17</caption>
+<caption>Study date window: 2025-03-01 &lt; date &lt; 2026-09-04</caption>
 <colgroup>
-<col style="width: 15%">
-<col style="width: 13%">
-<col style="width: 5%">
-<col style="width: 12%">
+<col style="width: 27%">
+<col style="width: 10%">
+<col style="width: 24%">
 <col style="width: 18%">
-<col style="width: 13%">
-<col style="width: 10%">
-<col style="width: 10%">
+<col style="width: 19%">
 </colgroup>
 <thead>
 <tr class="header">
-<th style="text-align: left;">Data table</th>
-<th style="text-align: left;">Resolution</th>
+<th style="text-align: left;">Table</th>
 <th style="text-align: right;">Rows</th>
-<th style="text-align: right;">Missing user IDs</th>
-<th style="text-align: right;">Missing dates/timestamps</th>
 <th style="text-align: right;">On or before start</th>
 <th style="text-align: right;">Within window</th>
 <th style="text-align: right;">Today or later</th>
@@ -2511,220 +2393,121 @@ vertical-align: -.125em;
 <tbody>
 <tr class="odd">
 <td style="text-align: left;">gps_5min</td>
-<td style="text-align: left;">5 minutes</td>
-<td style="text-align: right;">375532</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">390863</td>
 <td style="text-align: right;">65</td>
-<td style="text-align: right;">375467</td>
+<td style="text-align: right;">390798</td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr class="even">
-<td style="text-align: left;">myair_5min</td>
-<td style="text-align: left;">5 minutes</td>
-<td style="text-align: right;">1251262</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">839</td>
-<td style="text-align: right;">1250423</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">smartwatchhigh_5min</td>
-<td style="text-align: left;">5 minutes</td>
-<td style="text-align: right;">4263047</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">4254882</td>
-<td style="text-align: right;">8165</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">smartwatchlow_5min</td>
-<td style="text-align: left;">5 minutes</td>
-<td style="text-align: right;">4244241</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">4236076</td>
-<td style="text-align: right;">8165</td>
-</tr>
-<tr class="odd">
 <td style="text-align: left;">gps_daily</td>
-<td style="text-align: left;">Daily</td>
-<td style="text-align: right;">8286</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">9014</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">8283</td>
+<td style="text-align: right;">9011</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">myair_5min</td>
+<td style="text-align: right;">1353117</td>
+<td style="text-align: right;">839</td>
+<td style="text-align: right;">1352278</td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">myair_daily</td>
-<td style="text-align: left;">Daily</td>
-<td style="text-align: right;">8757</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">9389</td>
 <td style="text-align: right;">31</td>
-<td style="text-align: right;">8726</td>
+<td style="text-align: right;">9358</td>
 <td style="text-align: right;">0</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">smartwatchhigh_daily</td>
-<td style="text-align: left;">Daily</td>
-<td style="text-align: right;">16134</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">16105</td>
-<td style="text-align: right;">29</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">smartwatchlow_daily</td>
-<td style="text-align: left;">Daily</td>
-<td style="text-align: right;">16064</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">16035</td>
-<td style="text-align: right;">29</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">sleep_tidy</td>
-<td style="text-align: left;">Participant-night</td>
-<td style="text-align: right;">3824</td>
+<td style="text-align: right;">3996</td>
 <td style="text-align: right;">0</td>
+<td style="text-align: right;">3996</td>
 <td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">smartwatchhigh_5min</td>
+<td style="text-align: right;">3238689</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">3824</td>
+<td style="text-align: right;">3232678</td>
+<td style="text-align: right;">6011</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">smartwatchhigh_daily</td>
+<td style="text-align: right;">15810</td>
 <td style="text-align: right;">0</td>
+<td style="text-align: right;">15783</td>
+<td style="text-align: right;">27</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">smartwatchlow_5min</td>
+<td style="text-align: right;">4455537</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">4447372</td>
+<td style="text-align: right;">8165</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">smartwatchlow_daily</td>
+<td style="text-align: right;">16789</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">16760</td>
+<td style="text-align: right;">29</td>
 </tr>
 </tbody>
 </table>
 </div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(table_dates)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
-<section id="duplicate-analytical-keys" class="level2">
-<h2 class="anchored" data-anchor-id="duplicate-analytical-keys">Duplicate analytical keys</h2>
-<p>Duplicates are evaluated after applying the date window and removing rows with missing key components. “Rows involved” counts every row belonging to a duplicated key; these are the rows excluded by the analysis notebooks.</p>
+<section id="smartwatch-firmware-provenance" class="level2">
+<h2 class="anchored" data-anchor-id="smartwatch-firmware-provenance">Smartwatch firmware provenance</h2>
+<p>Firmware counts use the complete five-minute tables. Literal <code>N/A</code> denotes unknown provenance; it is distinct from missing/blank values and causes no exclusion.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>duplicate_summary <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  daily_duplicate_summary, gps_5min_duplicate_summary, myair_5min_duplicate_summary,</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  smartwatch_high_5min_duplicate_summary, smartwatch_low_5min_duplicate_summary</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(<span class="fu">factor</span>(resolution, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;5 minutes&quot;</span>, <span class="st">&quot;Daily&quot;</span>, <span class="st">&quot;Participant-night&quot;</span>)), data_table)</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>duplicate_summary <span class="sc">%&gt;%</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">percent_rows_involved =</span> <span class="fu">round</span>(percent_rows_involved, <span class="dv">3</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">format =</span> <span class="st">&quot;pipe&quot;</span>, <span class="at">big.mark =</span> <span class="st">&quot;,&quot;</span>,</span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">col.names =</span> <span class="fu">c</span>(</span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Data table&quot;</span>, <span class="st">&quot;Resolution&quot;</span>, <span class="st">&quot;Duplicated keys&quot;</span>, <span class="st">&quot;Rows involved&quot;</span>,</span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Rows with complete keys in window&quot;</span>, <span class="st">&quot;Rows involved (%)&quot;</span></span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">&quot;Duplicated analytical keys within the retained date window&quot;</span></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>firmware_summary <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  smartwatchhigh_5min <span class="sc">%&gt;%</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">data_table =</span> <span class="st">&quot;smartwatchhigh_5min&quot;</span>, <span class="at">buckets =</span> <span class="fu">n</span>(),</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>              <span class="at">missing_or_blank =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(firmware) <span class="sc">|</span> <span class="fu">trimws</span>(firmware) <span class="sc">==</span> <span class="st">&quot;&quot;</span>),</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>              <span class="at">unknown_code =</span> <span class="fu">sum</span>(firmware <span class="sc">==</span> <span class="st">&quot;N/A&quot;</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)),</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  smartwatchlow_5min <span class="sc">%&gt;%</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">data_table =</span> <span class="st">&quot;smartwatchlow_5min&quot;</span>, <span class="at">buckets =</span> <span class="fu">n</span>(),</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>              <span class="at">missing_or_blank =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(firmware) <span class="sc">|</span> <span class="fu">trimws</span>(firmware) <span class="sc">==</span> <span class="st">&quot;&quot;</span>),</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>              <span class="at">unknown_code =</span> <span class="fu">sum</span>(firmware <span class="sc">==</span> <span class="st">&quot;N/A&quot;</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>firmware_summary <span class="sc">%&gt;%</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">format =</span> <span class="st">&quot;pipe&quot;</span>, <span class="at">big.mark =</span> <span class="st">&quot;,&quot;</span>,</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>               <span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">&quot;Table&quot;</span>, <span class="st">&quot;Buckets&quot;</span>, <span class="st">&quot;Missing/blank firmware&quot;</span>, <span class="st">&quot;Firmware N/A&quot;</span>),</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>               <span class="at">caption =</span> <span class="st">&quot;Five-minute smartwatch provenance; no rows are removed&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Duplicated analytical keys within the retained date window</caption>
-<colgroup>
-<col style="width: 17%">
-<col style="width: 14%">
-<col style="width: 13%">
-<col style="width: 11%">
-<col style="width: 28%">
-<col style="width: 14%">
-</colgroup>
+<caption>Five-minute smartwatch provenance; no rows are removed</caption>
 <thead>
 <tr class="header">
-<th style="text-align: left;">Data table</th>
-<th style="text-align: left;">Resolution</th>
-<th style="text-align: right;">Duplicated keys</th>
-<th style="text-align: right;">Rows involved</th>
-<th style="text-align: right;">Rows with complete keys in window</th>
-<th style="text-align: right;">Rows involved (%)</th>
+<th style="text-align: left;">Table</th>
+<th style="text-align: right;">Buckets</th>
+<th style="text-align: right;">Missing/blank firmware</th>
+<th style="text-align: right;">Firmware N/A</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td style="text-align: left;">gps_5min</td>
-<td style="text-align: left;">5 minutes</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">375467</td>
-<td style="text-align: right;">0.002</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">myair_5min</td>
-<td style="text-align: left;">5 minutes</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1250423</td>
-<td style="text-align: right;">0.000</td>
-</tr>
-<tr class="odd">
 <td style="text-align: left;">smartwatchhigh_5min</td>
-<td style="text-align: left;">5 minutes</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">50</td>
-<td style="text-align: right;">4254882</td>
-<td style="text-align: right;">0.001</td>
+<td style="text-align: right;">3238689</td>
+<td style="text-align: right;">9</td>
+<td style="text-align: right;">901</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">smartwatchlow_5min</td>
-<td style="text-align: left;">5 minutes</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">4236076</td>
-<td style="text-align: right;">0.000</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">gps_daily</td>
-<td style="text-align: left;">Daily</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: right;">36</td>
-<td style="text-align: right;">8283</td>
-<td style="text-align: right;">0.435</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">myair_daily</td>
-<td style="text-align: left;">Daily</td>
+<td style="text-align: right;">4455537</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">8726</td>
-<td style="text-align: right;">0.000</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">smartwatchhigh_daily</td>
-<td style="text-align: left;">Daily</td>
-<td style="text-align: right;">63</td>
-<td style="text-align: right;">126</td>
-<td style="text-align: right;">16105</td>
-<td style="text-align: right;">0.782</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">smartwatchlow_daily</td>
-<td style="text-align: left;">Daily</td>
-<td style="text-align: right;">61</td>
-<td style="text-align: right;">122</td>
-<td style="text-align: right;">16035</td>
-<td style="text-align: right;">0.761</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">sleep_tidy</td>
-<td style="text-align: left;">Participant-night</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">3824</td>
-<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">871</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
-</section>
-<section id="interpretation" class="level2">
-<h2 class="anchored" data-anchor-id="interpretation">Interpretation</h2>
-<p>This report identifies where records are excluded by the shared temporal and key-uniqueness rules. It does not decide whether non-duplicated sensor values are plausible, complete enough for a specific model, or clinically meaningful; those decisions remain analysis-specific.</p>
+<p>Missing aggregate firmware may also indicate multiple firmware versions within a bucket.</p>
 </section>
 
 </main>

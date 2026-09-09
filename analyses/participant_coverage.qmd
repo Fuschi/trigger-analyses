@@ -24,66 +24,71 @@ theme_set(theme_minimal(base_size = 12))
 
 ## Aim and privacy
 
-This exploratory report compares data coverage across nationalities and participants.
+Five-minute coverage by nationality and participant; sleep is reported separately in participant-nights.
 
-The primary unit is the five-minute bucket. One or multiple raw measurements from the same participant and data stream inside a bucket count as one observed participant-bucket. Raw record counts are intentionally not compared because the instruments have different sampling frequencies.
-
-Only `userId` and nationality are imported from the account table. Email and login information are not read. Real user identifiers are replaced by deterministic labels before any participant-level result is displayed; these labels are pseudonyms for this report and should not be interpreted as full anonymisation.
+Only participant ID and nationality are used. Displayed labels are pseudonyms, not full anonymisation.
 
 ## Data import
 
 ```{r, message=FALSE}
-accounts <- read_csv(
-  file.path(cfg$accounts_dir, "active_accounts.csv.gz"),
-  col_select = c(userId, nationality),
-  col_types = cols(userId = col_character(), nationality = col_character()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("active_accounts", inherits = FALSE)) {
+  active_accounts <- read_csv(
+    file.path(cfg$accounts_dir, "active_accounts.csv.gz"),
+    col_types = cols(userId = col_character(), nationality = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+accounts <- active_accounts %>% select(userId, nationality)
 
-gps_raw <- read_csv(
-  file.path(cfg$daily_dir, "gps_daily.csv.gz"),
-  col_select = c(userId, date, five_min_n),
-  col_types = cols(userId = col_character(), date = col_date(), five_min_n = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("gps_daily", inherits = FALSE)) {
+  gps_daily <- read_csv(
+    file.path(cfg$daily_dir, "gps_daily.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+gps <- gps_daily %>% select(userId, date, five_min_n)
 
-air_raw <- read_csv(
-  file.path(cfg$daily_dir, "myair_daily.csv.gz"),
-  col_select = c(userId, date, five_min_n),
-  col_types = cols(userId = col_character(), date = col_date(), five_min_n = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("myair_daily", inherits = FALSE)) {
+  myair_daily <- read_csv(
+    file.path(cfg$daily_dir, "myair_daily.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+air <- myair_daily %>% select(userId, date, five_min_n)
 
-smartwatch_high_raw <- read_csv(
-  file.path(cfg$daily_dir, "smartwatchhigh_daily.csv.gz"),
-  col_select = c(userId, date, five_min_n),
-  col_types = cols(userId = col_character(), date = col_date(), five_min_n = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("smartwatchhigh_daily", inherits = FALSE)) {
+  smartwatchhigh_daily <- read_csv(
+    file.path(cfg$daily_dir, "smartwatchhigh_daily.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+smartwatch_high <- smartwatchhigh_daily %>% select(userId, date, five_min_n)
 
-smartwatch_low_raw <- read_csv(
-  file.path(cfg$daily_dir, "smartwatchlow_daily.csv.gz"),
-  col_select = c(userId, date, five_min_n),
-  col_types = cols(userId = col_character(), date = col_date(), five_min_n = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("smartwatchlow_daily", inherits = FALSE)) {
+  smartwatchlow_daily <- read_csv(
+    file.path(cfg$daily_dir, "smartwatchlow_daily.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+smartwatch_low <- smartwatchlow_daily %>% select(userId, date, five_min_n)
 
-sleep_raw <- read_csv(
-  file.path(cfg$tidy_dir, "sleep_tidy.csv.gz"),
-  col_select = c(userId, date),
-  col_types = cols(userId = col_character(), date = col_date()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("sleep_tidy", inherits = FALSE)) {
+  sleep_tidy <- read_csv(
+    file.path(cfg$tidy_dir, "sleep_tidy.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+sleep <- sleep_tidy %>% select(userId, date)
 ```
 
-## Account checks
-
-The account table must contain one row per participant and a non-missing nationality before it can be joined to the coverage tables.
+## Participant roster
 
 ```{r}
-if (anyDuplicated(accounts$userId) > 0) stop("Duplicated userId values were found in active_accounts.csv.gz.")
-if (any(is.na(accounts$nationality) | accounts$nationality == "")) stop("Missing nationality values were found in active_accounts.csv.gz.")
-
 nationality_roster <- accounts %>% count(nationality, name = "participants", sort = TRUE)
 
 nationality_roster %>%
@@ -96,26 +101,23 @@ nationality_roster %>%
 
 ## Analysis dataset
 
-The shared project inclusion rules are applied before coverage is calculated. Their diagnostics are collected in the dedicated data-quality report.
+Study window: `2025-03-01 < date < Sys.Date()` (UTC).
 
 ```{r}
-gps_raw <- gps_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-air_raw <- air_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-smartwatch_high_raw <- smartwatch_high_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-smartwatch_low_raw <- smartwatch_low_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-sleep_raw <- sleep_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-gps <- gps_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
-air <- air_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
-smartwatch_high <- smartwatch_high_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
-smartwatch_low <- smartwatch_low_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
-sleep <- sleep_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+gps <- gps %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
 
-rm(gps_raw, air_raw, smartwatch_high_raw, smartwatch_low_raw, sleep_raw)
+air <- air %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
+
+smartwatch_high <- smartwatch_high %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
+
+smartwatch_low <- smartwatch_low %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
+
+sleep <- sleep %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
 ```
 
 ## Five-minute coverage dataset
 
-The four five-minute data streams are stacked without joining them to one another. Coverage is therefore retained even when a participant has data from only one instrument on a given day.
+Streams are stacked independently, retaining participants with data from only one instrument.
 
 ```{r}
 five_min_daily <- bind_rows(
@@ -125,18 +127,15 @@ five_min_daily <- bind_rows(
   smartwatch_low %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "Smartwatch low frequency")
 )
 
-if (any(five_min_daily$five_min_buckets < 0, na.rm = TRUE)) stop("Negative five-minute bucket counts were found.")
-if (any(five_min_daily$five_min_buckets > cfg$minutes_per_day / cfg$minutes_per_bucket, na.rm = TRUE)) stop("A participant-day exceeds 288 five-minute buckets.")
 
 five_min_daily <- five_min_daily %>%
   left_join(accounts, by = "userId", relationship = "many-to-one")
 
-if (any(is.na(five_min_daily$nationality))) stop("At least one participant in the coverage data is missing from the active-account table.")
 ```
 
 ## Participant pseudonyms
 
-Participants are ordered within nationality by their internal identifier and assigned a report-only sequential label. The original identifier remains available only for internal joins and is never printed.
+Report-only labels follow nationality and internal ID order; original IDs are never displayed.
 
 ```{r}
 participant_key <- accounts %>%
@@ -150,7 +149,7 @@ five_min_daily <- five_min_daily %>%
 
 ## Coverage by nationality
 
-Participants without data in a stream are retained with zero coverage. This makes nationality comparisons refer to the complete active-account roster rather than only to contributors.
+The denominator is the full active-account roster, including participants with zero coverage.
 
 ```{r}
 participant_stream_observed <- five_min_daily %>%
@@ -209,7 +208,7 @@ nationality_stream_summary %>%
 
 ### Absolute bucket totals
 
-Absolute totals depend on both the number of participants and their individual monitoring duration. They should therefore be read together with the participant-level distributions below.
+Totals depend on group size and monitoring duration.
 
 ```{r, fig.width=12, fig.height=7}
 nationality_stream_summary %>%
@@ -226,7 +225,7 @@ nationality_stream_summary %>%
 
 ### Participant-level distributions
 
-Each point represents one pseudonymised participant with data in the corresponding stream. Active days describe monitoring duration, while total buckets combine duration and within-day coverage.
+Active days measure monitoring duration; total buckets also reflect within-day coverage.
 
 ```{r, fig.width=12, fig.height=8}
 participant_stream_coverage %>%
@@ -244,8 +243,6 @@ participant_stream_coverage %>%
 ```
 
 ### Participant heatmap
-
-The heatmap includes the full active-account roster. Dark cells indicate zero or low coverage; participant labels are report-only pseudonyms.
 
 ```{r, fig.width=11, fig.height=30}
 participant_order <- participant_stream_coverage %>%
@@ -272,8 +269,6 @@ participant_stream_coverage %>%
 ```
 
 ## Daily coverage by nationality
-
-This view preserves the calendar date and compares the absolute number of participant-buckets contributed by each nationality. Differences in group size remain part of the absolute count.
 
 ```{r}
 daily_nationality_coverage <- five_min_daily %>%
@@ -306,7 +301,7 @@ daily_nationality_grid %>%
 
 ## Sleep coverage
 
-Sleep does not use five-minute buckets and is therefore reported separately as participant-nights. Participants without a sleep record are retained with zero coverage.
+Sleep coverage includes participants with zero recorded nights.
 
 ```{r}
 sleep_participant_coverage <- accounts %>%
@@ -358,4 +353,4 @@ sleep_participant_coverage %>%
 
 ## Interpretation boundaries
 
-This report describes data availability rather than measurement validity. Absolute national totals are affected by nationality-group size, recruitment timing and monitoring duration. Participant-level comparisons are descriptive and should not be interpreted as differences in adherence or data quality without additional investigation.
+These descriptive comparisons do not establish differences in adherence or measurement quality.

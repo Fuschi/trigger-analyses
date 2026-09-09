@@ -1,0 +1,407 @@
+---
+title: "Personal Humidex and heart rate: within-participant analysis"
+author: "Alessandro Fuschi"
+editor: source
+toc: true
+---
+
+## Setup
+
+```{r, message=FALSE}
+library(tidyverse)
+
+cfg <- list(
+  data_dir = file.path("data", "5min"), timezone = "UTC", analysis_start_date = as.Date("2025-03-01"),
+  max_steps = 10, sensitivity_max_steps = 20, bucket_minutes = 5, recent_minutes = 15,
+  reference_humidex = 25, hot_humidex = 40, support_half_width = 2, minimum_support_buckets = 6,
+  humidex_knots = c(20, 30, 40), humidex_boundary = c(10, 50), plot_range = c(20, 45),
+  minimum_plot_participants = 10, confidence_level = 0.95,
+  alternative_humidity = 60, temperature_support_width = 2, humidity_support_width = 10,
+  temperature_knots = c(20, 30), temperature_boundary = c(5, 45),
+  humidity_knots = c(40, 70), humidity_boundary = c(0, 100)
+)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+## Analysis question and decisions
+
+During low recorded activity, is higher personal Humidex associated with higher heart rate **within the same participant**? The primary estimate is the adjusted heart-rate difference at Humidex 40 versus 25, in bpm. Breathing rate is secondary, not independent physiological confirmation unless its measurement method is verified.
+
+These decisions were recorded on 2026-09-04, **after exploratory plots had been examined**. This is an exploratory inferential analysis, not a preregistered confirmatory test. Model specifications below are not selected by significance. The [descriptive notebook](personal_heat_physiology.html) remains separate.
+
+| Decision | Specification and consequence |
+|:--|:--|
+| Time scale | One observation per participant and five-minute UTC bucket; `2025-03-01 < date < Sys.Date()`. No daily outcomes or pollution. |
+| Low activity | `0 ≤ step_mean ≤ 10`; pragmatic continuity with the exploratory analysis. Zero and 20 are sensitivity cutoffs, not clinical definitions. Missing steps are excluded. |
+| Exposure contrast | Humidex 40 versus 25 contrasts hotter conditions with relatively comfortable conditions, informed by [ECCC guidance](https://www.canada.ca/en/services/environment/weather/severeweather/humidex.html). These are not diagnostic thresholds. |
+| Within-person support | At least six paired low-activity HR buckets within ±2 Humidex units of **each** contrast value. Six buckets represent 30 observed minutes, not necessarily consecutive. This pragmatic minimum excludes participants without observed exposure at both ends; inference targets this selected cohort. |
+| Exposure shape | Natural cubic spline, internal knots 20, 30 and 40, boundary knots 10 and 50; linear tails beyond the boundaries. All finite Humidex values are retained for eligible participants. The figure shows 20–45 only where at least ten participants have nearby observations. |
+| Adjustment | Participant fixed intercepts, year-month fixed effects, two sine/cosine harmonics of UTC hour and linear residual `step_mean`. Time-invariant personal characteristics are absorbed by participant intercepts. |
+| Weighting | Each participant has total weight one, distributed equally across their retained buckets. This is a common within-person response curve, not a mean of separately estimated personal slopes. Raw-reading counts are not weights. |
+| Uncertainty | Participant-clustered CR1 covariance and t intervals with G−1 degrees of freedom. Serial dependence within each person is allowed; independence between participants is assumed. Curve intervals are pointwise, not simultaneous. |
+
+## Local data and analytical selection
+
+Upstream ETL tables are used as supplied. Humidex uses MyAir temperature (°C) and relative humidity (%), assuming MyAir accompanied the participant. Observed-minute coverage is retained but not used as a precision weight.
+
+```{r, message=FALSE}
+if (!exists("myair_5min", inherits = FALSE)) {
+  myair_5min <- read_csv(
+    file.path(cfg$data_dir, "myair_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+if (!exists("smartwatchhigh_5min", inherits = FALSE)) {
+  smartwatchhigh_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+if (!exists("smartwatchlow_5min", inherits = FALSE)) {
+  smartwatchlow_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+
+exposure <- myair_5min %>%
+  select(userId, bucket_5min, air_minutes = observed_minute_n, temperature = temperature_mean, humidity = humidity_mean) %>%
+  filter(as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+         as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()) %>%
+  left_join(
+    smartwatchhigh_5min %>% select(userId, bucket_5min, watch_minutes = observed_minute_n,
+                                  heartrate = heartrate_mean, breathrate = breathrate_mean),
+    by = c("userId", "bucket_5min"), relationship = "one-to-one"
+  ) %>%
+  left_join(smartwatchlow_5min %>% select(userId, bucket_5min, steps = step_mean),
+            by = c("userId", "bucket_5min"), relationship = "one-to-one") %>%
+  mutate(humidex = ThermIndex::humidex(temperature, humidity),
+         period = format(bucket_5min, "%Y-%m", tz = cfg$timezone),
+         hour = lubridate::hour(bucket_5min) + lubridate::minute(bucket_5min) / 60)
+
+paired <- exposure %>% filter(is.finite(humidex), is.finite(steps), steps >= 0, is.finite(heartrate))
+low_activity <- paired %>% filter(steps <= cfg$max_steps)
+participant_support <- low_activity %>%
+  group_by(userId) %>%
+  summarise(reference_buckets = sum(abs(humidex - cfg$reference_humidex) <= cfg$support_half_width),
+            hot_buckets = sum(abs(humidex - cfg$hot_humidex) <= cfg$support_half_width), .groups = "drop")
+eligible <- participant_support %>%
+  filter(reference_buckets >= cfg$minimum_support_buckets, hot_buckets >= cfg$minimum_support_buckets)
+primary_data <- low_activity %>% semi_join(eligible, by = "userId")
+
+selection <- tibble(
+  selection = c("MyAir: study window", "Paired Humidex, nonnegative steps and heart rate", "Low activity", "Supported primary cohort"),
+  buckets = c(nrow(exposure), nrow(paired), nrow(low_activity), nrow(primary_data)),
+  participants = c(n_distinct(exposure$userId), n_distinct(paired$userId), n_distinct(low_activity$userId), n_distinct(primary_data$userId))
+) %>% mutate(buckets_removed = lag(buckets) - buckets)
+selection %>% knitr::kable(big.mark = ",", caption = "Analytical selection: observed five-minute buckets")
+```
+
+## Exposure support
+
+The support rule concerns observed exposure, not covariate overlap after adjustment. The second table shows how often both exposure regions also occur within the same participant and month. Sparse overlap makes adjustment more model-dependent.
+
+```{r}
+support_grid <- tibble(humidex = seq(cfg$plot_range[1], cfg$plot_range[2], by = 0.5))
+support_grid$participants <- 0L
+for (i in seq_len(nrow(support_grid))) {
+  nearby <- primary_data %>% filter(abs(humidex - support_grid$humidex[i]) <= cfg$support_half_width)
+  support_grid$participants[i] <- n_distinct(nearby$userId)
+}
+
+primary_data %>%
+  mutate(thermal_band = cut(humidex, c(-Inf, 20, 30, 40, Inf), right = FALSE)) %>%
+  group_by(thermal_band) %>%
+  summarise(buckets = n(), participants = n_distinct(userId),
+            median_air_minutes = median(air_minutes, na.rm = TRUE),
+            median_watch_minutes = median(watch_minutes, na.rm = TRUE), .groups = "drop") %>%
+  knitr::kable(big.mark = ",", caption = "Primary cohort coverage; observed minutes per five-minute bucket")
+
+period_support <- primary_data %>%
+  group_by(userId, period) %>%
+  summarise(reference_buckets = sum(abs(humidex - cfg$reference_humidex) <= cfg$support_half_width),
+            hot_buckets = sum(abs(humidex - cfg$hot_humidex) <= cfg$support_half_width), .groups = "drop") %>%
+  mutate(both = reference_buckets >= cfg$minimum_support_buckets & hot_buckets >= cfg$minimum_support_buckets)
+period_support %>%
+  summarise(participant_months = n(), supported_participant_months = sum(both),
+            participants_with_supported_month = n_distinct(userId[both])) %>%
+  knitr::kable(caption = "Within-month exposure overlap in the primary cohort")
+```
+
+```{r, fig.width=8, fig.height=3.5}
+support_grid %>% ggplot(aes(humidex, participants)) +
+  geom_area(fill = "#b8d9e6") + geom_line(color = "#17617d") +
+  geom_vline(xintercept = c(cfg$reference_humidex, cfg$hot_humidex), linetype = "dashed") +
+  labs(title = "Participants contributing nearby exposure", x = "Humidex",
+       y = "Participants", subtitle = "At least one paired bucket within ±2 Humidex units")
+```
+
+## Robustness specifications
+
+All sensitivity analyses begin with the primary eligible cohort. They change one rule at a time; their own bucket and participant counts are reported. Zero-step selection omits the constant steps covariate. The 15-minute history is built from **exactly adjacent** five-minute timestamps, never across gaps. A complete-history analysis separates loss of coverage from the effect of requiring recent low activity.
+
+Participant-by-month intercepts provide a stricter within-person, within-month comparison; equal-bucket weighting checks sensitivity to monitoring duration. Secondary breathing-rate analysis uses available records in the primary cohort. These estimates are not additional confirmatory tests.
+
+```{r}
+analysis_pool <- paired %>% semi_join(eligible, by = "userId")
+recent_steps <- smartwatchlow_5min %>%
+  select(userId, bucket_5min, steps = step_mean) %>%
+  filter(as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+         as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date())
+history_columns <- paste0("steps_lag_", seq_len(cfg$recent_minutes / cfg$bucket_minutes))
+for (i in seq_along(history_columns)) {
+  previous <- recent_steps %>% mutate(bucket_5min = bucket_5min + i * cfg$bucket_minutes * 60)
+  names(previous)[names(previous) == "steps"] <- history_columns[i]
+  analysis_pool <- analysis_pool %>% left_join(previous, by = c("userId", "bucket_5min"), relationship = "one-to-one")
+}
+analysis_pool <- analysis_pool %>%
+  mutate(complete_history = if_all(all_of(history_columns), ~ is.finite(.x) & .x >= 0),
+         recent_low = if_all(all_of(history_columns), ~ is.finite(.x) & between(.x, 0, cfg$max_steps)))
+
+specifications <- tibble(
+  analysis = c("Primary", "Zero steps", "Steps ≤20", "Complete 15-min history", "Low activity in preceding 15 min",
+               "Participant × month intercepts", "Equal bucket weights", "Breathing rate (secondary)"),
+  max_steps = c(cfg$max_steps, 0, cfg$sensitivity_max_steps, rep(cfg$max_steps, 5)),
+  history = c("none", "none", "none", "complete", "low", "none", "none", "none"),
+  participant_month = c(rep(FALSE, 5), TRUE, FALSE, FALSE),
+  equal_participant_weight = c(rep(TRUE, 6), FALSE, TRUE),
+  outcome = c(rep("heartrate", 7), "breathrate")
+)
+```
+
+## Adjusted models
+
+The model is `outcome = participant intercept + f(Humidex) + year-month + cyclic hour + steps`. Fixed intercepts are absorbed by centering the outcome **and every design column** within participant (or participant-month in that sensitivity). This is algebraically equivalent to weighted least squares with explicit fixed-effect indicators, without allocating a large indicator matrix.
+
+Cluster covariance follows [Cameron and Miller](https://cameron.econ.ucdavis.edu/research/Cameron_Miller_JHR_2015.pdf): participant score sums, CR1 factor `G/(G−1) × (N−1)/(N−K)`, with absorbed intercepts included in K. This accounts for within-person serial correlation, not time-varying confounding or shared errors between different participants. No normality assumption is made for the raw heart-rate distribution.
+
+```{r}
+model_results <- list()
+model_objects <- list()
+
+for (s in seq_len(nrow(specifications))) {
+  specification <- specifications[s, ]
+  model_data <- analysis_pool %>%
+    filter(steps <= specification$max_steps, is.finite(.data[[specification$outcome]]))
+  if (specification$history == "complete") model_data <- model_data %>% filter(complete_history)
+  if (specification$history == "low") model_data <- model_data %>% filter(recent_low)
+  model_data <- model_data %>%
+    mutate(fixed_group = if (specification$participant_month) paste(userId, period) else userId) %>%
+    group_by(fixed_group) %>% filter(n() > 1) %>% ungroup() %>%
+    group_by(userId) %>% mutate(weight = if (specification$equal_participant_weight) 1 / n() else 1) %>% ungroup()
+
+  heat_basis <- splines::ns(model_data$humidex, knots = cfg$humidex_knots, Boundary.knots = cfg$humidex_boundary)
+  colnames(heat_basis) <- paste0("heat", seq_len(ncol(heat_basis)))
+  controls <- cbind(hour_sin = sin(2 * pi * model_data$hour / 24), hour_cos = cos(2 * pi * model_data$hour / 24),
+                    hour_sin2 = sin(4 * pi * model_data$hour / 24), hour_cos2 = cos(4 * pi * model_data$hour / 24))
+  if (specification$max_steps > 0) controls <- cbind(controls, steps = model_data$steps)
+  if (!specification$participant_month && n_distinct(model_data$period) > 1) {
+    controls <- cbind(controls, model.matrix(~ factor(period), model_data)[, -1, drop = FALSE])
+  }
+  design <- cbind(heat_basis, controls)
+  group_index <- match(model_data$fixed_group, unique(model_data$fixed_group))
+  group_weight <- as.numeric(rowsum(model_data$weight, group_index, reorder = FALSE))
+  design_means <- rowsum(design * model_data$weight, group_index, reorder = FALSE) / group_weight
+  outcome_means <- as.numeric(rowsum(model_data[[specification$outcome]] * model_data$weight,
+                                    group_index, reorder = FALSE)) / group_weight
+  within_design <- design - design_means[group_index, , drop = FALSE]
+  within_outcome <- model_data[[specification$outcome]] - outcome_means[group_index]
+  weighted_design <- within_design * sqrt(model_data$weight)
+  design_qr <- qr(weighted_design)
+  retained_columns <- sort(design_qr$pivot[seq_len(design_qr$rank)])
+  within_design <- within_design[, retained_columns, drop = FALSE]
+  weighted_design <- weighted_design[, retained_columns, drop = FALSE]
+  fit <- lm.fit(weighted_design, within_outcome * sqrt(model_data$weight))
+  bread <- solve(crossprod(weighted_design))
+  residual <- within_outcome - as.numeric(within_design %*% fit$coefficients)
+  cluster_index <- match(model_data$userId, unique(model_data$userId))
+  cluster_scores <- rowsum(within_design * (model_data$weight * residual), cluster_index, reorder = FALSE)
+  clusters <- n_distinct(model_data$userId)
+  parameters <- ncol(within_design) + length(group_weight)
+  correction <- clusters / (clusters - 1) * (nrow(model_data) - 1) / (nrow(model_data) - parameters)
+  covariance <- correction * bread %*% crossprod(cluster_scores) %*% bread
+
+  contrast_basis <- predict(heat_basis, c(cfg$reference_humidex, cfg$hot_humidex))
+  contrast <- setNames(rep(0, ncol(design)), colnames(design))
+  contrast[colnames(heat_basis)] <- contrast_basis[2, ] - contrast_basis[1, ]
+  contrast <- contrast[retained_columns]
+  estimate <- sum(contrast * fit$coefficients)
+  standard_error <- sqrt(as.numeric(t(contrast) %*% covariance %*% contrast))
+  critical <- qt((1 + cfg$confidence_level) / 2, df = clusters - 1)
+  own_support <- model_data %>% group_by(userId) %>%
+    summarise(reference = sum(abs(humidex - cfg$reference_humidex) <= cfg$support_half_width),
+              hot = sum(abs(humidex - cfg$hot_humidex) <= cfg$support_half_width), .groups = "drop")
+  model_results[[s]] <- tibble(
+    analysis = specification$analysis, outcome = specification$outcome, buckets = nrow(model_data), participants = clusters,
+    supported_participants = sum(own_support$reference >= cfg$minimum_support_buckets & own_support$hot >= cfg$minimum_support_buckets),
+    estimate = estimate, lower = estimate - critical * standard_error, upper = estimate + critical * standard_error,
+    omitted_columns = ncol(design) - length(retained_columns)
+  )
+  if (s == 1) {
+    model_objects$primary <- list(coefficients = fit$coefficients, covariance = covariance, critical = critical,
+      heat_basis = heat_basis, contrast = contrast, design = within_design, outcome = within_outcome,
+      weights = model_data$weight, cluster_index = cluster_index, data = model_data, bread = bread)
+  }
+}
+results <- bind_rows(model_results)
+results %>%
+  mutate(unit = if_else(outcome == "heartrate", "bpm", "breaths/min")) %>%
+  select(analysis, unit, buckets, participants, supported_participants, estimate, lower, upper, omitted_columns) %>%
+  knitr::kable(digits = 2, big.mark = ",", caption = "Adjusted Humidex 40 versus 25 differences and 95% participant-clustered intervals")
+```
+
+`supported_participants` reapplies the six-bucket rule to each model's retained observations; sensitivity cohorts are not reselected on this measure. Lost support increases model dependence. `omitted_columns` reports any non-estimable design columns after fixed-effect absorption.
+
+```{r, fig.width=9, fig.height=4.5}
+results %>% filter(outcome == "heartrate") %>%
+  mutate(analysis = factor(analysis, levels = rev(specifications$analysis))) %>%
+  ggplot(aes(estimate, analysis, xmin = lower, xmax = upper)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey55") +
+  geom_errorbar(orientation = "y", width = 0.15) + geom_point(size = 2.5, color = "#17617d") +
+  labs(title = "Heart-rate association and sensitivity analyses", y = NULL,
+       x = "Adjusted difference, Humidex 40 versus 25 (bpm)", subtitle = "95% participant-clustered confidence intervals")
+```
+
+## Adjusted exposure-response curve
+
+The curve is the primary model's difference relative to Humidex 25, holding adjustment variables fixed. A shared exposure-response shape is assumed. The reference is zero by construction, so its interval has zero width.
+
+```{r}
+primary <- model_objects$primary
+curve_data <- support_grid %>% filter(participants >= cfg$minimum_plot_participants)
+curve_design <- matrix(0, nrow(curve_data), length(primary$coefficients), dimnames = list(NULL, names(primary$coefficients)))
+curve_basis <- predict(primary$heat_basis, curve_data$humidex)
+reference_basis <- as.numeric(predict(primary$heat_basis, cfg$reference_humidex))
+curve_design[, colnames(primary$heat_basis)] <- sweep(curve_basis, 2, reference_basis)
+curve_data <- curve_data %>%
+  mutate(estimate = as.numeric(curve_design %*% primary$coefficients),
+         standard_error = sqrt(pmax(0, rowSums((curve_design %*% primary$covariance) * curve_design))),
+         lower = estimate - primary$critical * standard_error, upper = estimate + primary$critical * standard_error)
+```
+
+```{r, fig.width=8, fig.height=4.5}
+curve_data %>% ggplot(aes(humidex, estimate)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey55") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "#b8d9e6", alpha = 0.7) +
+  geom_line(color = "#17617d", linewidth = 1) +
+  labs(title = "Within-participant Humidex–heart-rate association", x = "Personal Humidex",
+       y = "Heart-rate difference versus Humidex 25 (bpm)", subtitle = "Adjusted curve; pointwise 95% participant-clustered intervals")
+```
+
+## Alternative exposure specification
+
+As a sensitivity to the composite index, temperature and relative humidity replace Humidex with **separate additive natural splines**. Temperature knots are 20/30 °C (boundaries 5/45 °C); humidity knots are 40/70% (boundaries 0/100%). Adjustment, participants and weights are unchanged. No temperature–humidity interaction is fitted in this alternative.
+
+For illustration, temperatures corresponding to Humidex 25 and 40 are calculated at a fixed 60% RH, a specified mid-range scenario rather than an exposure average. This estimates a temperature contrast at constant humidity, **not the same estimand** as the main Humidex contrast. Nearby coverage uses ±2 °C and ±10 percentage points RH, with at least six buckets at each end.
+
+```{r}
+alternative_conditions <- tibble(humidex = c(cfg$reference_humidex, cfg$hot_humidex), humidity = cfg$alternative_humidity,
+                                temperature = NA_real_)
+for (i in seq_len(nrow(alternative_conditions))) {
+  alternative_conditions$temperature[i] <- uniroot(
+    function(temperature) ThermIndex::humidex(temperature, cfg$alternative_humidity) - alternative_conditions$humidex[i],
+    interval = cfg$temperature_boundary
+  )$root
+}
+alternative_support <- primary$data %>% group_by(userId) %>%
+  summarise(reference = sum(abs(temperature - alternative_conditions$temperature[1]) <= cfg$temperature_support_width &
+                              abs(humidity - cfg$alternative_humidity) <= cfg$humidity_support_width),
+            hot = sum(abs(temperature - alternative_conditions$temperature[2]) <= cfg$temperature_support_width &
+                        abs(humidity - cfg$alternative_humidity) <= cfg$humidity_support_width), .groups = "drop")
+temperature_basis <- splines::ns(primary$data$temperature, knots = cfg$temperature_knots, Boundary.knots = cfg$temperature_boundary)
+humidity_basis <- splines::ns(primary$data$humidity, knots = cfg$humidity_knots, Boundary.knots = cfg$humidity_boundary)
+alternative_basis <- cbind(temperature_basis, humidity_basis)
+colnames(alternative_basis) <- c(paste0("temperature", seq_len(ncol(temperature_basis))), paste0("humidity", seq_len(ncol(humidity_basis))))
+alternative_group_weight <- as.numeric(rowsum(primary$weights, primary$cluster_index, reorder = FALSE))
+alternative_means <- rowsum(alternative_basis * primary$weights, primary$cluster_index, reorder = FALSE) / alternative_group_weight
+alternative_design <- cbind(alternative_basis - alternative_means[primary$cluster_index, , drop = FALSE],
+                            primary$design[, !startsWith(colnames(primary$design), "heat"), drop = FALSE])
+alternative_fit <- lm.fit(alternative_design * sqrt(primary$weights), primary$outcome * sqrt(primary$weights))
+alternative_bread <- solve(crossprod(alternative_design, alternative_design * primary$weights))
+alternative_residual <- primary$outcome - as.numeric(alternative_design %*% alternative_fit$coefficients)
+alternative_scores <- rowsum(alternative_design * (primary$weights * alternative_residual), primary$cluster_index, reorder = FALSE)
+alternative_clusters <- results$participants[1]
+alternative_parameters <- ncol(alternative_design) + alternative_clusters
+alternative_correction <- alternative_clusters / (alternative_clusters - 1) *
+  (nrow(alternative_design) - 1) / (nrow(alternative_design) - alternative_parameters)
+alternative_covariance <- alternative_correction * alternative_bread %*% crossprod(alternative_scores) %*% alternative_bread
+temperature_contrast_basis <- predict(temperature_basis, alternative_conditions$temperature)
+alternative_contrast <- c(temperature_contrast_basis[2, ] - temperature_contrast_basis[1, ],
+                          rep(0, ncol(alternative_design) - ncol(temperature_basis)))
+alternative_estimate <- sum(alternative_contrast * alternative_fit$coefficients)
+alternative_se <- sqrt(as.numeric(t(alternative_contrast) %*% alternative_covariance %*% alternative_contrast))
+alternative_conditions %>% knitr::kable(digits = 2, caption = "Illustrative exposure conditions: temperature (°C) and relative humidity (%)")
+tibble(supported_participants = sum(alternative_support$reference >= cfg$minimum_support_buckets &
+                                      alternative_support$hot >= cfg$minimum_support_buckets),
+       estimate_bpm = alternative_estimate, lower = alternative_estimate - primary$critical * alternative_se,
+       upper = alternative_estimate + primary$critical * alternative_se) %>%
+  knitr::kable(digits = 2, caption = "Alternative temperature contrast at 60% RH; 95% participant-clustered interval")
+```
+
+## Single-participant influence
+
+Each participant is removed in turn and the primary model is refitted through its within-person sufficient statistics. Redundant calendar columns are absorbed into the remaining columns only when the contrast remains estimable. This checks whether one participant drives the contrast; it is not an uncertainty interval or external validation. Only aggregate influence summaries are displayed.
+
+```{r}
+total_crossproduct <- crossprod(primary$design, primary$design * primary$weights)
+total_crossoutcome <- crossprod(primary$design, primary$outcome * primary$weights)
+leave_one_out <- rep(NA_real_, results$participants[1])
+for (i in seq_along(leave_one_out)) {
+  rows <- which(primary$cluster_index == i)
+  reduced_crossproduct <- total_crossproduct - crossprod(primary$design[rows, , drop = FALSE],
+                                                        primary$design[rows, , drop = FALSE] * primary$weights[rows])
+  reduced_crossoutcome <- total_crossoutcome - crossprod(primary$design[rows, , drop = FALSE],
+                                                        primary$outcome[rows] * primary$weights[rows])
+  reduced_qr <- qr(reduced_crossproduct)
+  retained <- sort(reduced_qr$pivot[seq_len(reduced_qr$rank)])
+  omitted <- setdiff(seq_len(ncol(reduced_crossproduct)), retained)
+  reduced_matrix <- reduced_crossproduct[retained, retained, drop = FALSE]
+  estimable <- TRUE
+  if (length(omitted) > 0) {
+    aliases <- solve(reduced_matrix, reduced_crossproduct[retained, omitted, drop = FALSE])
+    estimable <- max(abs(primary$contrast[omitted] - as.numeric(crossprod(aliases, primary$contrast[retained])))) < 1e-8
+  }
+  if (estimable) {
+    leave_one_out[i] <- sum(primary$contrast[retained] * solve(reduced_matrix, reduced_crossoutcome[retained, , drop = FALSE]))
+  }
+}
+tibble(successful_refits = sum(is.finite(leave_one_out)), attempted_refits = length(leave_one_out),
+       primary_bpm = results$estimate[1], minimum_bpm = min(leave_one_out, na.rm = TRUE),
+       maximum_bpm = max(leave_one_out, na.rm = TRUE),
+       maximum_absolute_change_bpm = max(abs(leave_one_out - results$estimate[1]), na.rm = TRUE)) %>%
+  knitr::kable(digits = 2, caption = "Leave-one-participant-out Humidex contrasts")
+```
+
+## Interpretation and publication requirements
+
+In `r results$participants[1]` participants contributing `r scales::comma(results$buckets[1])` five-minute buckets, the adjusted heart-rate difference at Humidex 40 versus 25 is **`r sprintf("%.2f", results$estimate[1])` bpm** (95% participant-clustered CI **`r sprintf("%.2f to %.2f", results$lower[1], results$upper[1])`**). This estimates a within-person association in the exposure-supported, low-activity cohort—not heat-attributable injury or clinical deterioration.
+
+Heart-rate sensitivity point estimates range from `r sprintf("%.2f", min(results$estimate[results$outcome == "heartrate"]))` to `r sprintf("%.2f", max(results$estimate[results$outcome == "heartrate"]))` bpm. The secondary breathing-rate contrast is `r sprintf("%.2f", results$estimate[results$outcome == "breathrate"])` breaths/min (95% CI `r sprintf("%.2f to %.2f", results$lower[results$outcome == "breathrate"], results$upper[results$outcome == "breathrate"])`). The alternative temperature-at-fixed-humidity contrast is `r sprintf("%.2f", alternative_estimate)` bpm (95% CI `r sprintf("%.2f to %.2f", alternative_estimate - primary$critical * alternative_se, alternative_estimate + primary$critical * alternative_se)`). Interpret it alongside its lower joint-exposure support and different estimand, rather than as direct replication or refutation of the Humidex result.
+
+Publication still requires the smartwatch model, validation of its heart-rate channel, documentation of how breathing rate is obtained, and confirmation of MyAir wearing/carrying practice. These are not documented in this repository. ETL correctness does not establish sensor validity. An elevated heart rate can reflect thermoregulatory response; it is not by itself proof of harmful physiological strain.
+
+Time-varying confounding (recent exertion, posture, hydration, medication, illness and sleep), informative device wear/missingness, person-specific daily rhythms, and shared site/date conditions remain possible. UTC cyclic terms and common month effects do not resolve all of these. The study is contemporaneous and does not establish temporal direction or rapid-change responses. The secondary outcome and sensitivity analyses are exploratory, without multiplicity-adjusted claims.
+
+Report all specifications, the selection flow, exposure support, effect sizes and intervals, not only statistically significant results. Independent participants or subsequently collected data are needed for confirmatory replication. A future clinical interpretation also needs a justified meaningful-effect threshold; none is assumed here.
+
+## Reproducibility
+
+The end date is evaluated at render time. Input hashes identify the local dumps without exporting participant data. Interactive users must remove cached table objects after a download refresh; a fresh Quarto render reads the files anew.
+
+```{r}
+input_files <- file.path(cfg$data_dir, c("myair_5min.csv.gz", "smartwatchhigh_5min.csv.gz", "smartwatchlow_5min.csv.gz"))
+tibble(file = basename(input_files), md5 = unname(tools::md5sum(input_files))) %>%
+  knitr::kable(caption = paste("Local inputs; render date", Sys.Date()))
+```
+
+::: {.callout-note collapse="true"}
+## R session
+
+```{r}
+sessionInfo()
+```
+:::

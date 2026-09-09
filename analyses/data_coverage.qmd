@@ -23,88 +23,93 @@ theme_set(theme_minimal(base_size = 12))
 
 ## Aim
 
-This exploratory report describes the absolute temporal coverage of the local data snapshot.
+Five-minute coverage is derived from the daily tables; sleep coverage is measured in participant-nights.
 
-The five-minute bucket is the common temporal unit across instruments. One or multiple raw measurements for the same participant and variable within a bucket count as one observed bucket. Five-minute coverage is reconstructed from the variable-specific bucket counts stored in the daily tables. Sleep is reported separately because it is observed once per participant-night rather than continuously through the day.
-
-An observed day means that at least one value is available; it is not necessarily a complete day. The report therefore keeps calendar days, participant-days and observed minutes distinct. No minimum daily coverage threshold is imposed at this exploratory stage.
+An observed day requires at least one value, with no minimum daily coverage.
 
 ## Data import
 
-Only identifiers, dates and coverage-count columns are imported. The analytical key is `userId` and `date` within each table.
-
 ```{r, message=FALSE}
-gps_raw <- read_csv(
-  file.path(cfg$daily_dir, "gps_daily.csv.gz"),
-  col_select = c(userId, date, five_min_n, position_5min_n),
-  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("gps_daily", inherits = FALSE)) {
+  gps_daily <- read_csv(
+    file.path(cfg$daily_dir, "gps_daily.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+gps <- gps_daily %>% select(userId, date, five_min_n, position_5min_n)
 
-air_raw <- read_csv(
-  file.path(cfg$daily_dir, "myair_daily.csv.gz"),
-  col_select = c(
-    userId, date, five_min_n, pm1_5min_n, pm25_5min_n, pm10_5min_n,
-    temperature_5min_n, humidity_5min_n, pressure_5min_n, sound_5min_n,
-    uvb_5min_n, light_5min_n
-  ),
-  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("myair_daily", inherits = FALSE)) {
+  myair_daily <- read_csv(
+    file.path(cfg$daily_dir, "myair_daily.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+air <- myair_daily %>%
+  select(
+    userId, date, five_min_n, pm1_5min_n, pm25_5min_n, pm10_5min_n, temperature_5min_n,
+    humidity_5min_n, pressure_5min_n, sound_5min_n, uvb_5min_n, light_5min_n
+  )
 
-smartwatch_high_raw <- read_csv(
-  file.path(cfg$daily_dir, "smartwatchhigh_daily.csv.gz"),
-  col_select = c(
-    userId, date, five_min_n, heartrate_5min_n, oxygens_5min_n,
-    breathrate_5min_n, sleeprate_5min_n
-  ),
-  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("smartwatchhigh_daily", inherits = FALSE)) {
+  smartwatchhigh_daily <- read_csv(
+    file.path(cfg$daily_dir, "smartwatchhigh_daily.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+smartwatch_high <- smartwatchhigh_daily %>%
+  select(
+    userId, date, five_min_n, heartrate_5min_n, oxygens_5min_n, breathrate_5min_n, sleeprate_5min_n
+  )
 
-smartwatch_low_raw <- read_csv(
-  file.path(cfg$daily_dir, "smartwatchlow_daily.csv.gz"),
-  col_select = c(
-    userId, date, five_min_n, step_5min_n, cal_5min_n, bphigh_5min_n,
-    bplow_5min_n, bodytemp_5min_n, skintemp_5min_n
-  ),
-  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("smartwatchlow_daily", inherits = FALSE)) {
+  smartwatchlow_daily <- read_csv(
+    file.path(cfg$daily_dir, "smartwatchlow_daily.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+smartwatch_low <- smartwatchlow_daily %>%
+  select(
+    userId, date, five_min_n, step_5min_n, cal_5min_n, bphigh_5min_n, bplow_5min_n, bodytemp_5min_n,
+    skintemp_5min_n
+  )
 
-sleep_raw <- read_csv(
-  file.path(cfg$tidy_dir, "sleep_tidy.csv.gz"),
-  col_select = c(
-    userId, date, sleepduration, awake, insomnia, remsleep, lightsleep,
-    deepsleep, sleepquality, fallsleepefficiency
-  ),
-  col_types = cols(userId = col_character(), date = col_date(), .default = col_double()),
-  na = c("", "NA", "NULL"), show_col_types = FALSE
-)
+if (!exists("sleep_tidy", inherits = FALSE)) {
+  sleep_tidy <- read_csv(
+    file.path(cfg$tidy_dir, "sleep_tidy.csv.gz"),
+    col_types = cols(userId = col_character(), date = col_date()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+sleep <- sleep_tidy %>%
+  select(
+    userId, date, sleepduration, awake, insomnia, remsleep, lightsleep, deepsleep, sleepquality,
+    fallsleepefficiency
+  )
 ```
 
 ## Analysis dataset
 
-The shared project inclusion rules are applied before coverage is calculated. Their diagnostics are collected in the dedicated data-quality report.
+Study window: `2025-03-01 < date < Sys.Date()` (UTC).
 
 ```{r}
-gps_raw <- gps_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-air_raw <- air_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-smartwatch_high_raw <- smartwatch_high_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-smartwatch_low_raw <- smartwatch_low_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-sleep_raw <- sleep_raw %>% filter(!is.na(date), date > cfg$analysis_start_date, date < Sys.Date())
-gps <- gps_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
-air <- air_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
-smartwatch_high <- smartwatch_high_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
-smartwatch_low <- smartwatch_low_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
-sleep <- sleep_raw %>% add_count(userId, date, name = "key_n") %>% filter(key_n == 1) %>% select(-key_n)
+gps <- gps %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
 
-rm(gps_raw, air_raw, smartwatch_high_raw, smartwatch_low_raw, sleep_raw)
+air <- air %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
+
+smartwatch_high <- smartwatch_high %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
+
+smartwatch_low <- smartwatch_low %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
+
+sleep <- sleep %>% filter(date > cfg$analysis_start_date, date < Sys.Date())
 ```
 
 ## Five-minute variable coverage
 
-The daily tables contain the number of five-minute buckets with an available value for each variable. A participant contributes at most once per variable and bucket, irrespective of the number of raw measurements inside it. Counts summed across participants are therefore participant-buckets, not clock time for the cohort as a whole.
+Totals are participant-buckets, not elapsed time for the cohort.
 
 ```{r}
 gps_coverage <- gps %>%
@@ -144,7 +149,7 @@ smartwatch_low_coverage <- smartwatch_low %>%
     variable = recode(
       variable, step_5min_n = "Steps", cal_5min_n = "Calories",
       bphigh_5min_n = "Systolic blood pressure", bplow_5min_n = "Diastolic blood pressure",
-      bodytemp_5min_n = "Body temperature", skintemp_5min_n = "Skin temperature"
+      bodytemp_5min_n = "bodytemp (sensor scale)", skintemp_5min_n = "skintemp (sensor scale)"
     )
   )
 
@@ -153,13 +158,11 @@ five_min_coverage <- bind_rows(
 ) %>%
   mutate(observed_minutes = five_min_buckets * cfg$minutes_per_bucket)
 
-if (any(five_min_coverage$five_min_buckets < 0, na.rm = TRUE)) stop("Negative five-minute coverage counts were found.")
-if (any(five_min_coverage$five_min_buckets > cfg$minutes_per_day / cfg$minutes_per_bucket, na.rm = TRUE)) stop("A daily coverage count exceeds 288 five-minute buckets.")
 ```
 
 ### Absolute coverage summary
 
-`Participant-days` counts participant–date combinations with at least one observed bucket. Minutes are a direct conversion of the primary bucket count.
+`Participant-days` counts participant–date combinations with data; derived minutes equal buckets × 5.
 
 ```{r}
 five_min_summary <- five_min_coverage %>%
@@ -194,8 +197,6 @@ five_min_summary %>%
 
 ### Daily five-minute buckets by variable
 
-The heatmap shows the absolute number of five-minute participant-buckets observed on each date. A square-root colour transformation makes both sparse and dense periods visible while the legend remains in buckets.
-
 ```{r, fig.width=14, fig.height=10}
 variable_lookup <- five_min_coverage %>% distinct(domain, variable)
 
@@ -229,7 +230,7 @@ daily_variable_grid %>%
 
 ## Calendar coverage by data stream
 
-For this calendar view, a participant contributes once to a date when at least one measurement is available in the corresponding stream. The colour therefore represents the absolute number of participants with any data, independently of how many minutes they contributed.
+Each participant counts once per date and stream when any measurement is available.
 
 ```{r}
 stream_days <- bind_rows(
@@ -275,8 +276,6 @@ calendar_grid %>%
 
 ## Calendar coverage in five-minute buckets
 
-This calendar uses the common five-minute unit directly. A participant-bucket is one five-minute window for one participant and data stream. It counts once whether the source instrument produced one or several raw measurements inside that window. Sleep is not included because it is a nightly dataset rather than a five-minute stream.
-
 ```{r}
 stream_bucket_days <- bind_rows(
   gps %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "GPS"),
@@ -285,8 +284,6 @@ stream_bucket_days <- bind_rows(
   smartwatch_low %>% select(userId, date, five_min_buckets = five_min_n) %>% mutate(data_stream = "Smartwatch low frequency")
 )
 
-if (any(stream_bucket_days$five_min_buckets < 0, na.rm = TRUE)) stop("Negative stream-level five-minute bucket counts were found.")
-if (any(stream_bucket_days$five_min_buckets > cfg$minutes_per_day / cfg$minutes_per_bucket, na.rm = TRUE)) stop("A stream-level daily coverage count exceeds 288 five-minute buckets.")
 
 daily_stream_buckets <- stream_bucket_days %>%
   group_by(data_stream, date) %>%
@@ -326,7 +323,7 @@ bucket_calendar_grid %>%
 
 ## Sleep-variable coverage
 
-Sleep coverage is expressed as participant-nights. A value of zero is retained as observed data; only missing values are treated as unavailable.
+Zero is an observed value; only missing values are unavailable.
 
 ```{r}
 sleep_coverage <- sleep %>%
@@ -336,7 +333,7 @@ sleep_coverage <- sleep %>%
       variable, sleepduration = "Sleep duration", awake = "Awake time",
       insomnia = "Insomnia", remsleep = "REM sleep", lightsleep = "Light sleep",
       deepsleep = "Deep sleep", sleepquality = "Sleep quality",
-      fallsleepefficiency = "Sleep onset efficiency"
+      fallsleepefficiency = "fallsleepefficiency (raw)"
     )
   )
 
@@ -386,4 +383,4 @@ sleep_grid %>%
 
 ## Interpretation boundaries
 
-This report describes availability, not measurement validity. A covered interval may still contain implausible sensor values and a covered day may contain only five minutes of data. Variable-specific quality control and minimum coverage requirements should therefore be defined in the analysis that uses each outcome or exposure.
+Coverage measures availability, not measurement validity.

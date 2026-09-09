@@ -1,0 +1,176 @@
+---
+title: "Humidex and physiology during low activity"
+author: "Alessandro Fuschi"
+editor: source
+toc: true
+---
+
+## Setup
+
+```{r, message=FALSE}
+library(tidyverse)
+
+cfg <- list(
+  data_dir = file.path("data", "5min"), timezone = "UTC",
+  analysis_start_date = as.Date("2025-03-01"), max_steps = 10,
+  humidex_bin_width = 2, humidex_breaks = c(-Inf, 20, 30, 40, Inf),
+  minimum_participants = 10
+)
+
+theme_set(theme_minimal(base_size = 12))
+outcomes <- c("heartrate", "breathrate", "oxygen", "systolic", "diastolic", "bodytemp", "skintemp")
+outcome_labels <- c(
+  heartrate = "Heart rate (bpm)", breathrate = "Breathing rate (breaths/min)",
+  oxygen = "Oxygen saturation (%)", systolic = "Systolic pressure (mmHg)",
+  diastolic = "Diastolic pressure (mmHg)", bodytemp = "bodytemp (sensor units)",
+  skintemp = "skintemp (sensor units)"
+)
+```
+
+## Scope
+
+Physiology versus personal Humidex in five-minute buckets with `0 ≤ step_mean ≤ cfg$max_steps` (currently `r cfg$max_steps`). This exploratory cutoff selects little recorded walking, not verified rest: non-walking exercise and recovery from earlier activity remain possible. `step_mean` averages repeated readings; it is not their sum.
+
+Study window: `2025-03-01 < date < Sys.Date()` (UTC). Humidex is calculated from MyAir temperature and humidity, assuming the instrument accompanies the participant.
+
+## Local data
+
+```{r, message=FALSE}
+if (!exists("myair_5min", inherits = FALSE)) {
+  myair_5min <- read_csv(
+    file.path(cfg$data_dir, "myair_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+if (!exists("smartwatchhigh_5min", inherits = FALSE)) {
+  smartwatchhigh_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+if (!exists("smartwatchlow_5min", inherits = FALSE)) {
+  smartwatchlow_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = cfg$timezone), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+
+exposure <- myair_5min %>%
+  select(userId, bucket_5min, air_minutes = observed_minute_n,
+         temperature = temperature_mean, humidity = humidity_mean) %>%
+  filter(as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
+         as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()) %>%
+  left_join(
+    smartwatchhigh_5min %>%
+      select(userId, bucket_5min, watch_minutes = observed_minute_n,
+             heartrate = heartrate_mean, breathrate = breathrate_mean, oxygen = oxygens_mean),
+    by = c("userId", "bucket_5min"), relationship = "one-to-one"
+  ) %>%
+  left_join(
+    smartwatchlow_5min %>%
+      select(userId, bucket_5min, steps = step_mean, systolic = bphigh_mean, diastolic = bplow_mean,
+             bodytemp = bodytemp_mean, skintemp = skintemp_mean),
+    by = c("userId", "bucket_5min"), relationship = "one-to-one"
+  ) %>%
+  mutate(humidex = ThermIndex::humidex(temperature, humidity))
+```
+
+## Low-activity selection
+
+Missing steps are not treated as zero. Each bucket counts once, regardless of its raw-reading count; each physiological variable uses its own available observations.
+
+```{r}
+low_activity <- exposure %>%
+  filter(is.finite(humidex), is.finite(steps), between(steps, 0, cfg$max_steps))
+
+tibble(
+  selection = c("MyAir buckets in study window", "With finite Humidex", "With Humidex and recorded steps", "Low activity"),
+  buckets = c(nrow(exposure), sum(is.finite(exposure$humidex)),
+              sum(is.finite(exposure$humidex) & is.finite(exposure$steps)), nrow(low_activity))
+) %>%
+  knitr::kable(big.mark = ",", caption = "Five-minute buckets retained at each selection step")
+
+physiology <- low_activity %>%
+  select(userId, bucket_5min, humidex, all_of(outcomes)) %>%
+  pivot_longer(all_of(outcomes), names_to = "outcome", values_to = "value") %>%
+  filter(is.finite(value)) %>%
+  mutate(
+    label = factor(outcome_labels[outcome], levels = outcome_labels),
+    humidex_bin = floor(humidex / cfg$humidex_bin_width) * cfg$humidex_bin_width,
+    thermal_band = cut(humidex, cfg$humidex_breaks, right = FALSE, labels = c("<20", "20–<30", "30–<40", "≥40"))
+  )
+```
+
+## Coverage
+
+Humidex bands follow the thresholds described by [Environment and Climate Change Canada](https://www.canada.ca/en/services/environment/weather/severeweather/humidex.html); they do not classify physiological stress or cold stress.
+
+```{r}
+coverage <- physiology %>%
+  group_by(label, thermal_band) %>%
+  summarise(buckets = n(), participants = n_distinct(userId), .groups = "drop") %>%
+  complete(label, thermal_band, fill = list(buckets = 0L, participants = 0L))
+```
+
+```{r, fig.width=10, fig.height=6}
+coverage %>%
+  ggplot(aes(thermal_band, label, fill = buckets)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = paste0(scales::comma(buckets), "\n", participants, " participants")), size = 3.5) +
+  scale_fill_viridis_c(option = "C", begin = 0.5, end = 0.95, transform = "sqrt", labels = scales::comma) +
+  labs(title = "Physiological coverage during low activity",
+       subtitle = paste0("Observed five-minute buckets; step_mean ≤ ", cfg$max_steps),
+       x = "Humidex", y = NULL, fill = "Buckets") +
+  theme(panel.grid = element_blank())
+```
+
+## Physiology by Humidex
+
+Values are averaged within each participant and two-unit Humidex bin, then across participants with equal weight. Only bins with ≥`r cfg$minimum_participants` participants are plotted to avoid sparse summaries. Participants can differ between bins; no model or significance test is fitted.
+
+```{r}
+participant_profiles <- physiology %>%
+  group_by(userId, outcome) %>%
+  mutate(personal_mean = mean(value), centered = value - personal_mean) %>%
+  group_by(userId, label, humidex_bin) %>%
+  summarise(value = mean(value), centered = mean(centered), buckets = n(), .groups = "drop")
+
+profiles <- participant_profiles %>%
+  group_by(label, humidex_bin) %>%
+  summarise(value = mean(value), centered = mean(centered), participants = n(),
+            buckets = sum(buckets), .groups = "drop")
+
+plot_profiles <- profiles %>% filter(participants >= cfg$minimum_participants)
+```
+
+```{r, fig.width=12, fig.height=8}
+plot_profiles %>%
+  ggplot(aes(humidex_bin + cfg$humidex_bin_width / 2, value, color = participants)) +
+  geom_point(size = 2) + facet_wrap(~ label, scales = "free_y", ncol = 3) +
+  scale_color_viridis_c(end = 0.8) +
+  labs(title = "Physiological values during low activity",
+       subtitle = "Equal weight per participant within each Humidex bin",
+       x = "Humidex bin midpoint", y = "Mean (panel units)", color = "Participants")
+```
+
+## Difference from personal mean
+
+The baseline is each participant's mean for that variable over the retained low-activity buckets. Subtraction reduces differences in individual baseline levels; it does not adjust for time of day, season or recent exercise.
+
+```{r, fig.width=12, fig.height=8}
+plot_profiles %>%
+  ggplot(aes(humidex_bin + cfg$humidex_bin_width / 2, centered, color = participants)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey60") +
+  geom_point(size = 2) + facet_wrap(~ label, scales = "free_y", ncol = 3) +
+  scale_color_viridis_c(end = 0.8) +
+  labs(title = "Physiology relative to each participant's low-activity mean",
+       subtitle = "Positive values are above the personal mean; no adjustment beyond centering",
+       x = "Humidex bin midpoint", y = "Deviation (panel units)", color = "Participants")
+```
+
+## Interpretation
+
+These are descriptive associations, not evidence of heat-induced deterioration. Low step counts do not establish absence of physical activity. Blood-pressure channels are not assumed clinically validated, and body/skin temperature channels retain their recorded sensor units. Changes in oxygen saturation are percentage-point differences.

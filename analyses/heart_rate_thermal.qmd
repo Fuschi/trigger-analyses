@@ -12,76 +12,66 @@ library(tidyverse)
 cfg <- list(
   data_dir = file.path("data", "5min"),
   timezone = "UTC",
-  analysis_start_date = as.Date("2025-03-01")
+  analysis_start_date = as.Date("2025-03-01"),
+  steps_cutoff = 840,
+  steps_bin_width = 10,
+  minimum_subjects = 10
 )
 ```
 
 ## Data import
 
-The five-minute tables are read using `userId` and `bucket_5min` as analytical keys. Only buckets whose UTC date is strictly after 1 March 2025 and strictly before the current date are retained.
-
-Each available bucket counts once, irrespective of the number of raw measurements produced inside the five-minute interval.
-
-If an analytical key occurs more than once within the same table, all corresponding rows are removed because the duplicate records cannot be resolved unambiguously at this stage.
+Study window: `2025-03-01 < date < Sys.Date()` (UTC), with one row per `userId` and `bucket_5min`.
 
 ```{r, message=FALSE}
-air <- read_csv(
-  file.path(cfg$data_dir, "myair_5min.csv.gz"),
-  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
-  col_types = cols(
-    userId = col_character(),
-    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
-  ),
-  show_col_types = FALSE
-) %>%
+if (!exists("myair_5min", inherits = FALSE)) {
+  myair_5min <- read_csv(
+    file.path(cfg$data_dir, "myair_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+air <- myair_5min
+air <- air %>%
   filter(
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 
-swh <- read_csv(
-  file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
-  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
-  col_types = cols(
-    userId = col_character(),
-    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
-  ),
-  show_col_types = FALSE
-) %>%
+if (!exists("smartwatchhigh_5min", inherits = FALSE)) {
+  smartwatchhigh_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchhigh_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+swh <- smartwatchhigh_5min
+swh <- swh %>%
   filter(
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 
-swl <- read_csv(
-  file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
-  na = c("", "NA", "NULL"), locale = locale(tz = cfg$timezone),
-  col_types = cols(
-    userId = col_character(),
-    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
-  ),
-  show_col_types = FALSE
-) %>%
+if (!exists("smartwatchlow_5min", inherits = FALSE)) {
+  smartwatchlow_5min <- read_csv(
+    file.path(cfg$data_dir, "smartwatchlow_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+swl <- smartwatchlow_5min
+swl <- swl %>%
   filter(
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 ```
 
 ## Heart-rate dataset
 
-The analytical dataset is anchored to the heart-rate table. Activity and environmental measurements are added when available for the same subject and five-minute interval.
+Heart-rate buckets are retained; activity and environment are matched by participant and bucket.
 
-`step_mean` is used instead of `step_sum`, because the same step measurement is repeated across the raw observations within each bucket.
+`step_mean` averages repeated minute readings; it is not their sum.
 
 ```{r}
 hr_dat <- swh %>%
@@ -117,15 +107,13 @@ hr_dat <- swh %>%
   mutate(userId = factor(userId))
 ```
 
-The original tables are no longer required.
-
 ```{r}
 rm(air, swh, swl)
 ```
 
 ## Derived variables
 
-Humidex is calculated from temperature and relative humidity. Heart-rate range represents the difference between the maximum and minimum heart rate recorded within each five-minute interval.
+Humidex uses temperature and relative humidity; heart-rate range is the within-bucket maximum minus minimum.
 
 ```{r}
 hr_dat <- hr_dat %>%
@@ -140,9 +128,7 @@ hr_dat <- hr_dat %>%
 
 ## Within-subject heart rate
 
-Heart rate is centered around each subject's personal mean.
-
-This transformation removes between-subject differences in average heart rate while preserving the original unit of measurement.
+Heart rate is expressed in bpm relative to each participant's mean.
 
 ```{r}
 hr_dat <- hr_dat %>%
@@ -153,8 +139,6 @@ hr_dat <- hr_dat %>%
   ) %>%
   ungroup()
 ```
-
-Positive values of `heartrate_c` indicate a heart rate above the subject's personal mean. Negative values indicate a heart rate below the personal mean.
 
 ## Data coverage
 
@@ -212,12 +196,12 @@ hr_dat %>%
 
 ## Heart rate by step interval
 
-Step counts are grouped into intervals of ten steps. For each interval, the number of observations, number of subjects, mean centered heart rate and interquartile range are calculated.
+Summaries use `r cfg$steps_bin_width`-step intervals.
 
 ```{r}
 hr_steps_summary <- hr_dat %>%
   filter(!is.na(steps), !is.na(heartrate_c)) %>%
-  mutate(steps_bin = floor(steps / 10) * 10) %>%
+  mutate(steps_bin = floor(steps / cfg$steps_bin_width) * cfg$steps_bin_width) %>%
   group_by(steps_bin) %>%
   summarise(
     observations = n(),
@@ -275,26 +259,21 @@ hr_steps_summary %>%
   )
 ```
 
-Intervals containing 840 or more steps are supported by fewer than ten subjects and are excluded from the activity-adjustment model.
+Values ≥ `r cfg$steps_cutoff` steps/5 min are excluded because of sparse upper-tail support in the earlier snapshot. This is an exploratory cutoff, not a physiological limit.
 
 ```{r}
-steps_cutoff <- 840
-
 hr_steps_dat <- hr_dat %>%
   filter(
     !is.na(steps),
     !is.na(heartrate_c),
-    steps < steps_cutoff
+    steps < cfg$steps_cutoff
   ) %>%
   droplevels()
 ```
 
 # Activity-adjusted heart rate
 
-Two models are compared to describe the non-linear association between physical activity and centered heart rate:
-
-1. a generalized additive model;
-2. a cubic polynomial model.
+A GAM and a cubic polynomial describe the activity–heart-rate association.
 
 ```{r}
 hr_steps_dat <- hr_steps_dat %>%
@@ -418,11 +397,7 @@ steps_predictions %>%
   theme_minimal()
 ```
 
-The GAM explained `r scales::percent(gam_summary$dev.expl, accuracy = 0.1)` of the variance in centered heart rate, compared with `r scales::percent(cubic_summary$adj.r.squared, accuracy = 0.1)` for the cubic model.
-
-The residual standard deviations were `r round(sqrt(gam_summary$scale), 2)` bpm for the GAM and `r round(cubic_summary$sigma, 2)` bpm for the cubic model.
-
-The GAM provided only a modest improvement while requiring approximately `r round(gam_summary$s.table[1, "edf"], 1)` effective degrees of freedom. The cubic model uses only three polynomial terms and captures most of the observed association. It was therefore selected as the simpler activity-adjustment model.
+The cubic fit is retained for exploratory adjustment, not selected through independent validation. Neither model accounts for within-subject dependence.
 
 ## Activity-adjusted outcome
 
@@ -434,9 +409,7 @@ hr_steps_dat <- hr_steps_dat %>%
   )
 ```
 
-`heartrate_activity_adj` is the observed centered heart rate minus the value expected from the number of steps recorded during the same five-minute interval.
-
-Positive values indicate a heart rate higher than expected for the recorded level of activity.
+`heartrate_activity_adj` is the cubic-model residual (bpm); positive values exceed the activity-based prediction.
 
 ## Residual association with physical activity
 
@@ -464,9 +437,7 @@ hr_steps_dat %>%
 
 ## Humidex
 
-The association between thermal conditions and activity-adjusted heart rate is explored using one-unit Humidex intervals.
-
-To prevent subjects with more observations from dominating the summary, a mean value is first calculated for each subject within each Humidex interval. These subject-specific means are then averaged across subjects.
+Within each one-unit Humidex interval, participant means receive equal weight. Intervals require at least `r cfg$minimum_subjects` participants to limit sparse support.
 
 ```{r}
 hr_humidex_summary <- hr_steps_dat %>%
@@ -489,7 +460,7 @@ hr_humidex_summary <- hr_steps_dat %>%
     sd_between_subjects = sd(user_mean),
     .groups = "drop"
   ) %>%
-  filter(subjects >= 10) %>%
+  filter(subjects >= cfg$minimum_subjects) %>%
   mutate(
     se = sd_between_subjects / sqrt(subjects),
     ci_low =
@@ -525,4 +496,4 @@ hr_humidex_summary %>%
   theme_minimal()
 ```
 
-This analysis is exploratory. The activity-adjusted outcome is useful for visualizing the association, while formal inference should model physical activity and thermal exposure jointly and account for repeated measurements within subjects.
+Formal inference requires joint modelling of activity and thermal exposure with within-subject dependence.

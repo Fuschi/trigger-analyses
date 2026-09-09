@@ -2,6 +2,9 @@
 title: "Particle measurement quality control"
 author: "Alessandro Fuschi"
 editor: source
+format:
+  html:
+    html-math-method: mathml
 ---
 
 ## Setup
@@ -19,37 +22,25 @@ cfg <- list(
 
 ## Data import
 
-The five-minute MyAir table is imported using `userId` and `bucket_5min` as the analytical key. Only buckets whose UTC date is strictly after 1 March 2025 and strictly before the current date are retained.
-
-Each available bucket counts once, irrespective of the number of raw measurements produced inside the five-minute interval.
-
-Rows belonging to duplicated analytical keys are removed completely, because their origin cannot be resolved unambiguously at this stage.
+Study window: `2025-03-01 < date < Sys.Date()` (UTC), with one row per `userId` and `bucket_5min`.
 
 ```{r, message=FALSE}
-air <- read_csv(
-  file.path(cfg$data_dir, "myair_5min.csv.gz"),
-  na = c("", "NA", "NULL"),
-  locale = locale(tz = cfg$timezone),
-  col_types = cols(
-    userId = col_character(),
-    bucket_5min = col_datetime(format = "%Y-%m-%d %H:%M:%S")
-  ),
-  show_col_types = FALSE
-) %>%
+if (!exists("myair_5min", inherits = FALSE)) {
+  myair_5min <- read_csv(
+    file.path(cfg$data_dir, "myair_5min.csv.gz"),
+    col_types = cols(userId = col_character(), bucket_5min = col_datetime(), deviceId = col_character(), firmware = col_character()),
+    locale = locale(tz = "UTC"), na = c("", "NA", "NULL"), show_col_types = FALSE
+  )
+}
+air <- myair_5min
+air <- air %>%
   filter(
     as.Date(bucket_5min, tz = cfg$timezone) > cfg$analysis_start_date,
     as.Date(bucket_5min, tz = cfg$timezone) < Sys.Date()
-  ) %>%
-  add_count(userId, bucket_5min, name = "key_n") %>%
-  filter(key_n == 1) %>%
-  select(-key_n)
+  )
 ```
 
 ## Variable selection
-
-Mean particulate-mass and particle-count measurements are retained for each five-minute interval.
-
-Temperature and humidity minima and maxima are also retained for subsequent calculation of within-bucket variability.
 
 ```{r}
 air <- air %>%
@@ -83,7 +74,7 @@ air <- air %>%
 
 ## Particle measurements quality control
 
-Particle-count variables represent cumulative counts above increasing particle-size thresholds. They are therefore expected to follow the monotonic relation:
+Cumulative particle counts should decrease with increasing size threshold:
 
 $$
 \mathrm{PC}_{0.3} \geq
@@ -100,11 +91,9 @@ A five-minute particle block is classified as invalid when:
 - at least one particulate-mass value exceeds the exploratory upper screening
   threshold of `r cfg$particle_mass_max` µg/m³.
 
-Because particulate-mass and particle-count variables originate from the same sensor block, all PM and PC measurements are set to missing when either condition is detected.
+Both conditions mask all PM/PC values because they share a sensor block.
 
-The mass threshold is an explicit exploratory quality-control rule rather than
-a validated exposure limit. It should be reviewed against the sensor
-specification before formal inference.
+The mass threshold is exploratory, not a validated exposure limit; confirm it against sensor specifications before inference.
 
 ```{r}
 air <- air %>%
@@ -165,10 +154,6 @@ air %>%
     caption = "Particle quality-control classification"
   )
 ```
-
-
-
-
 
 
 
