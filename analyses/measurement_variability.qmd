@@ -1,0 +1,239 @@
+---
+title: "Measurement distributions and variability"
+format: html
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+Each participant-variable bucket with a non-missing mean counts as **one
+measurement**, whether it contains one or five observations. Missing means are
+excluded; GPS coordinates are included. Reader date defaults apply when loading.
+
+```{r}
+library(tidyverse)
+triggerR <- new.env()
+source("R/read_data.R", local = triggerR)
+if (!exists("trigger_5min")) trigger_5min <- triggerR$read_trigger_5min()
+```
+
+```{r}
+counts <- trigger_5min %>%
+  select(origin, userId, bucket_5min, variable, mean) %>%
+  filter(!is.na(mean)) %>%
+  distinct(origin, userId, bucket_5min, variable) %>%
+  count(origin, variable, name = "buckets")
+```
+
+## Total by variable
+
+```{r}
+#| fig-width: 10
+#| fig-height: 9
+p_n <- counts %>%
+  ggplot(aes(buckets, reorder(variable, buckets))) +
+  geom_col(fill = "#2878A5") +
+  facet_grid(origin ~ ., scales = "free_y", space = "free_y") +
+  scale_x_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
+  labs(x = "Observed five-minute buckets", y = NULL) +
+  theme_minimal(base_size = 12)
+p_n
+```
+
+## Overview: original scale
+
+All participants and dates are pooled. Each histogram uses the five-minute means,
+with one contribution per observed bucket and no weighting by `n`. Axes vary by
+variable; values retain their original units. No outlier thresholds are applied.
+
+```{r}
+plot_values <- function(source, variables = NULL, log = FALSE, binwidth = NULL) {
+  p <- trigger_5min %>%
+    select(origin, userId, bucket_5min, variable, mean) %>%
+    filter(origin == source, !is.na(mean)) %>%
+    filter(is.null(.env$variables) | variable %in% .env$variables) %>%
+    distinct(origin, userId, bucket_5min, variable, .keep_all = TRUE) %>%
+    ggplot(aes(mean)) +
+    geom_histogram(bins = 40, binwidth = binwidth, fill = "#2878A5") +
+    facet_wrap(~ variable, ncol = 3, scales = "free") +
+    scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+    labs(x = "Five-minute mean (original units)", y = "Observed buckets") +
+    theme_minimal(base_size = 12)
+  if (log) p <- p + scale_x_continuous(trans = "log1p", breaks = c(0, 10, 100, 1000, 10000, 100000),
+    labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+    labs(x = "Five-minute mean (log(1 + x) scale; original values)")
+  p
+}
+```
+
+### myair
+
+```{r}
+#| fig-width: 10
+#| fig-height: 10
+p_air <- plot_values("myair")
+p_air
+```
+
+### smartwatchhigh
+
+```{r}
+#| fig-width: 10
+#| fig-height: 3
+p_high <- plot_values("smartwatchhigh")
+p_high
+```
+
+### smartwatchlow
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+p_low <- plot_values("smartwatchlow")
+p_low
+```
+
+### gps
+
+```{r}
+#| fig-width: 10
+#| fig-height: 3
+p_gps <- plot_values("gps")
+p_gps
+```
+
+## Focused views
+
+### Log scale
+
+`uvb`, `light`, `pm*` and `pc*`: log(1 + x) scale, retaining zeros and extremes.
+
+```{r}
+#| fig-width: 10
+#| fig-height: 8
+p_log <- plot_values("myair",
+                     c("uvb", "light", "pm1", "pm25",
+                       "pm10", "pc03", "pc05",
+                       "pc1", "pc25", "pc5", "pc10"),
+                     log = TRUE)
+p_log
+```
+
+### Blood pressure
+
+1 mmHg bins, retaining the full range.
+
+```{r}
+#| fig-width: 10
+#| fig-height: 3
+p_bp <- plot_values("smartwatchlow", c("bphigh", "bplow"), binwidth = 1)
+p_bp
+```
+
+## Changes between consecutive buckets
+
+`delta` is the current mean minus the previous mean for the same participant,
+source and variable. Only pairs exactly five minutes apart are included; missing
+means and longer gaps are excluded. Absolute changes describe transition size,
+in each variable's original units, and cannot be ranked directly across units.
+
+```{r}
+changes <- trigger_5min %>%
+  select(origin, userId, variable, bucket_5min, mean) %>%
+  filter(!is.na(mean)) %>%
+  group_by(origin, userId, variable) %>%
+  arrange(bucket_5min, .by_group = TRUE) %>%
+  mutate(delta = mean - lag(mean),
+         gap = as.numeric(difftime(bucket_5min, lag(bucket_5min), units = "mins"))) %>%
+  filter(gap == 5) %>%
+  ungroup() %>%
+  select(origin, variable, delta)
+```
+
+```{r}
+changes %>%
+  group_by(origin, variable) %>%
+  summarise(pairs = n(),
+            median_abs = median(abs(delta)),
+            p95_abs = quantile(abs(delta), 0.95),
+            .groups = "drop") %>%
+  knitr::kable(digits = 2)
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 16
+p_diff <- ggplot(changes, aes(abs(delta))) +
+  geom_histogram(bins = 40, fill = "#2878A5") +
+  facet_wrap(~ origin + variable, ncol = 3, scales = "free") +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(x = "Absolute change between consecutive five-minute means", y = "Consecutive pairs") +
+  theme_minimal(base_size = 12)
+p_diff
+```
+
+## Hourly difference
+
+`max - min` within each participant-variable hour, in original units.
+Missing pairs are excluded; no minimum coverage threshold is applied.
+
+```{r}
+if (!exists("trigger_hourly")) trigger_hourly <- triggerR$read_trigger_hourly()
+
+diff_h <- trigger_hourly %>%
+  filter(!is.na(min), !is.na(max)) %>%
+  transmute(origin, userId, hour_ts, variable, delta = max - min)
+
+diff_h %>%
+  group_by(origin, variable) %>%
+  summarise(hours = n(), median = median(delta), p95 = quantile(delta, 0.95), .groups = "drop") %>%
+  knitr::kable(digits = 2)
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 16
+p_h <- ggplot(diff_h, aes(delta)) +
+  geom_histogram(bins = 40, fill = "#2878A5") +
+  facet_wrap(~ origin + variable, ncol = 3, scales = "free") +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(x = "Hourly max - min (original units)", y = "Participant-hours") +
+  theme_minimal(base_size = 12)
+p_h
+```
+
+## Daily difference
+
+`max - min` within each participant-variable day. Minimum and maximum are paired
+by source, participant, date and variable. Sleep and missing pairs are excluded;
+no minimum coverage threshold is applied. Daily and hourly differences describe
+ranges within different window lengths, not transitions between windows.
+
+```{r}
+if (!exists("trigger_daily")) trigger_daily <- triggerR$read_trigger_daily()
+
+diff_d <- trigger_daily %>%
+  filter(statistic %in% c("min", "max")) %>%
+  select(origin, userId, date, variable, statistic, value) %>%
+  pivot_wider(names_from = statistic, values_from = value) %>%
+  filter(!is.na(min), !is.na(max)) %>%
+  transmute(origin, userId, date, variable, delta = max - min)
+
+diff_d %>%
+  group_by(origin, variable) %>%
+  summarise(days = n(), median = median(delta), p95 = quantile(delta, 0.95), .groups = "drop") %>%
+  knitr::kable(digits = 2)
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 16
+p_d <- ggplot(diff_d, aes(delta)) +
+  geom_histogram(bins = 40, fill = "#2878A5") +
+  facet_wrap(~ origin + variable, ncol = 3, scales = "free") +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(x = "Daily max - min (original units)", y = "Participant-days") +
+  theme_minimal(base_size = 12)
+p_d
+```

@@ -23,6 +23,29 @@ data/accounts/
 This separates data acquisition from analysis and makes each analysis
 repeatable without additional API requests.
 
+Load the shared readers in the notebook setup chunk:
+
+```r
+library(tidyverse)
+source("R/read_data.R")
+cfg <- list(data_dir = "data", analysis_start_date = as.Date("2025-03-01"))
+```
+
+Read one original wide table, optionally selecting original columns:
+
+```r
+myair_daily <- read_trigger_table("myair_daily", data_dir = cfg$data_dir)
+accounts <- read_trigger_table("active_accounts", data_dir = cfg$data_dir,
+                               columns = c("userId", "nationality"))
+```
+
+The reader preserves the selected original columns, units and missing measurement
+values. IDs remain character and timestamps use UTC. All readers accept
+`start_date` (default `as.Date("2025-03-01")`) and `end_date` (default today in UTC).
+Measurement dates must be strictly between these bounds; missing dates are excluded.
+Account tables are not filtered by date. No deduplication or caching is applied.
+Apply other analytical rules explicitly after import.
+
 ## 3. Write the analysis
 
 Keep each analysis in one Quarto source file under `analyses/`:

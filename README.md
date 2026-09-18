@@ -19,7 +19,11 @@ Unless an analysis explicitly defines a different period, only records with a da
 
 Technical cleaning and key uniqueness belong to the upstream ETL; notebooks use the tables without structural checks or deduplication. Study dates, exploratory thresholds and model-specific inclusion rules remain analysis decisions.
 
-Each notebook imports complete tables under their original names (e.g. `myair_5min`) only if absent from the current R environment. Analysis objects are selected and filtered separately. After refreshing a dump, remove its object (e.g. `rm(myair_5min)`) to reload it on the next run. Reuse applies within one R session, not across separate Quarto renders; keeping full tables in memory increases RAM use.
+Notebook setup loads `R/read_data.R`. Use `read_trigger_table()` to read a local
+table in its original format, optionally selecting columns to limit RAM use.
+Each call reads the current file without caching or accessing the API.
+Filtering, quality control and modelling remain explicit in each notebook.
+See [the reader examples](docs/WORKFLOW.md).
 
 ## Project structure
 
@@ -27,6 +31,7 @@ Each notebook imports complete tables under their original names (e.g. `myair_5m
 trigger-analyses/
 ├── analyses/      # Quarto sources and self-contained HTML reports
 ├── data/          # downloader and local table dumps
+├── R/             # shared local table reader
 └── docs/          # setup, workflow and rendering documentation
 ```
 

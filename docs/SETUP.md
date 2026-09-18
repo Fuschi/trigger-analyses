@@ -13,3 +13,7 @@ install.packages(c("tidyverse", "ComplexUpset", "ThermIndex", "hexbin", "knitr",
 ```
 
 Open `trigger-analyses.Rproj` in RStudio after installing the packages. Local Python and R session files are excluded from Git.
+
+`R/read_data.R` uses `readr` and `tidyselect`, both
+provided by the existing tidyverse installation. No new runtime dependency is
+required. Source it from the project root; it does not change the working directory.

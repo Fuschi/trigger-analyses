@@ -1,0 +1,89 @@
+---
+title: "Sampling density within five-minute buckets"
+format: html
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+**1 observation per bucket ≈ every 5 minutes; 5 observations ≈ every minute.**
+Missing recordings can reduce these counts.
+
+```{r, message=FALSE}
+library(tidyverse)
+
+triggerR <- new.env()
+source("R/read_data.R", local = triggerR)
+if (!exists("trigger_5min")) trigger_5min <- triggerR$read_trigger_5min()
+```
+
+Percentages use buckets with `n > 0`, pooled across participants; zero/missing
+counts and `sleeprate` are excluded. GPS coordinates have no individual counts.
+
+```{r}
+counts <- trigger_5min %>%
+  select(origin, variable, n) %>%
+  filter(!is.na(n), n > 0) %>%
+  count(origin, variable, n, name = "buckets") %>%
+  group_by(origin, variable) %>%
+  mutate(percent = 100 * buckets / sum(buckets)) %>%
+  ungroup()
+```
+
+```{r}
+plot_counts <- function(source) {
+  counts %>%
+    filter(origin == source) %>%
+    ggplot(aes(n, percent)) +
+    geom_col(fill = "#2878A5", width = 0.7) +
+    geom_text(aes(label = ifelse(percent >= 5, sprintf("%.1f%%", percent), "")),
+              vjust = -0.4, size = 3.5) +
+    facet_wrap(~ variable, ncol = 3) +
+    scale_x_continuous(breaks = sort(unique(counts$n))) +
+    scale_y_continuous(breaks = c(0, 25, 50, 75, 100), limits = c(0, 110),
+                       labels = function(x) paste0(x, "%")) +
+    labs(x = "Observations per five-minute bucket", y = "Observed buckets (%)") +
+    theme_minimal(base_size = 12) +
+    theme(panel.grid.minor = element_blank(), panel.grid.major.x = element_blank())
+}
+```
+
+## myair
+
+```{r}
+#| fig-width: 10
+#| fig-height: 10
+p_air <- plot_counts("myair")
+p_air
+```
+
+## smartwatchhigh
+
+```{r}
+#| fig-width: 10
+#| fig-height: 3
+p_high <- plot_counts("smartwatchhigh")
+p_high
+```
+
+## smartwatchlow
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+p_low <- plot_counts("smartwatchlow")
+p_low
+```
+
+## gps
+
+```{r}
+#| fig-width: 6
+#| fig-height: 3
+p_gps <- plot_counts("gps")
+p_gps
+```
+
+Five minutes provides a common time base. `smartwatchlow` shows both 1 and 5
+observations per bucket, rather than a single uniform recording interval.
