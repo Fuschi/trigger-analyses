@@ -16,6 +16,7 @@ library(tidyverse)
 triggerR <- new.env()
 source("R/read_data.R", local = triggerR)
 if (!exists("trigger_5min")) trigger_5min <- triggerR$read_trigger_5min()
+trigger_5min <- triggerR$drop_suspect(trigger_5min)
 ```
 
 ```{r}

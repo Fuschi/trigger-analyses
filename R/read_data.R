@@ -166,3 +166,28 @@ filter_trigger_daily <- function(data, min_buckets_per_hour, min_hours) {
   }, logical(1))
   dplyr::filter(data, statistic == "sleep" | `5min_profile` %in% profiles[valid])
 }
+
+
+drop_suspect <- function(data, pm_limit = 500, pc_limit = 60000) {
+  pm <- c("pm1", "pm25", "pm10")
+  pc <- c("pc03", "pc05", "pc1", "pc25", "pc5", "pc10")
+  
+  bad <- data %>%
+    filter(origin == "myair", variable %in% c(pm, pc)) %>%
+    select(userId, bucket_5min, variable, mean) %>%
+    pivot_wider(names_from = variable, values_from = mean) %>%
+    filter(
+      coalesce(pm1 > pm25 | pm25 > pm10 | pm1 > pm10, FALSE) |
+        coalesce(pc03 < pc05 | pc05 < pc1 | pc1 < pc25 |
+                   pc25 < pc5 | pc5 < pc10, FALSE) |
+        if_any(all_of(pm), ~ coalesce(.x >= pm_limit, FALSE)) |
+        if_any(all_of(pc), ~ coalesce(.x >= pc_limit, FALSE))
+    ) %>%
+    distinct(userId, bucket_5min) %>%
+    mutate(.drop = TRUE)
+  
+  data %>%
+    mutate(.drop = origin == "myair" & variable %in% c(pm, pc)) %>%
+    anti_join(bad, by = c("userId", "bucket_5min", ".drop")) %>%
+    select(-.drop)
+}
