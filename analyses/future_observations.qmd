@@ -1,0 +1,54 @@
+---
+title: "Future observations"
+format:
+  html:
+    code-fold: true
+---
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+
+triggerR <- new.env()
+source("../R/read_data.R", local = triggerR)
+
+if (!exists("trigger_tidy")) trigger_tidy <- triggerR$read_tidy()
+```
+
+## Future observations
+
+Dates after today are identified in UTC.
+
+```{r}
+observation_future <- trigger_tidy |>
+  filter(as.Date(minute_ts, tz = "UTC") > as.Date(Sys.time(), tz = "UTC"))
+```
+
+## Export
+
+All columns are retained in a gzip-compressed CSV.
+
+```{r}
+dir.create("data", showWarnings = FALSE, recursive = TRUE)
+readr::write_csv(observation_future, "data/future_observations.csv.gz")
+```
+
+## Summary
+
+```{r}
+observation_future |>
+  pivot_longer(-c(userId, minute_ts), names_to = "variable",
+               values_to = "value", values_drop_na = TRUE) |>
+  group_by(variable) |>
+  summarise(
+    observations_n = n(),
+    participants_n = n_distinct(userId),
+    first_date = min(as.Date(minute_ts, tz = "UTC")),
+    last_date = max(as.Date(minute_ts, tz = "UTC")),
+    min = min(value), max = max(value),
+    .groups = "drop"
+  ) |>
+  knitr::kable()
+```

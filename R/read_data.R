@@ -1,193 +1,304 @@
-# Remove all objects except the three retained datasets, including hidden objects.
-clean_environment <- function(envir = .GlobalEnv) {
-  keep <- c("trigger_5min", "trigger_hourly", "trigger_daily", "triggerR")
-  rm(list = setdiff(ls(envir = envir, all.names = TRUE), keep), envir = envir)
-  invisible(gc())
-}
+# ---------------------------------------------------------------------------
+# Internal CSV reader
+# ---------------------------------------------------------------------------
 
-# Read a local table by name, optionally selecting original columns.
-# IDs and profiles stay character; dates and timestamps are parsed in UTC.
-# Filter measurement dates strictly between start_date and end_date in UTC.
-# Account tables have no measurement date and are not filtered.
-read_trigger_table <- function(table, data_dir = "data", columns = NULL,
-  start_date = as.Date("2025-03-01"), end_date = as.Date(Sys.time(), tz = "UTC")) {
-  start_date <- as.Date(start_date)
-  end_date <- as.Date(end_date)
-  stopifnot(length(start_date) == 1, length(end_date) == 1,
-            !is.na(start_date), !is.na(end_date), start_date < end_date)
-  folder <- if (table %in% c("accounts", "active_accounts")) "accounts" else sub(".*_", "", table)
+# Read a local CSV.GZ dump with consistent column types.
+# IDs and coverage profiles remain character; dates and timestamps use UTC.
+# Column selection happens during reading to reduce memory use.
+
+.read_trigger_csv <- function(table, data_dir = "data", columns = NULL) {
+  folder <- sub("^.*_", "", table)
   path <- file.path(data_dir, folder, paste0(table, ".csv.gz"))
   if (!file.exists(path)) stop("Local dump is missing: ", path, call. = FALSE)
-
-  header <- names(readr::read_csv(path, n_max = 0, show_col_types = FALSE, name_repair = "check_unique"))
-  types <- setNames(rep("?", length(header)), header)
-  types[header %in% c("userId", "deviceId", "firmware", "nationality", "email") | grepl("profile$", header)] <- "c"
-  types[grepl("(_ts|_at|_at_max)$|^bucket_(5min|hour)$", header)] <- "T"
-  types[header == "date"] <- "D"
-  if (is.null(columns)) columns <- header
-  time_column <- intersect(c("date", "hour_ts", "minute_ts", "bucket_5min", "event_ts"), header)[1]
-  if (table %in% c("accounts", "active_accounts")) time_column <- NA_character_
-  read_columns <- unique(c(columns, time_column[!is.na(time_column)]))
-
-  data <- suppressWarnings(readr::read_csv(
-    path, col_select = tidyselect::all_of(read_columns), col_types = paste(types, collapse = ""),
+  
+  header <- names(readr::read_csv(
+    path, n_max = 0, name_repair = "check_unique", show_col_types = FALSE
+  ))
+  
+  if (!is.null(columns)) {
+    missing_columns <- setdiff(columns, header)
+    if (length(missing_columns)) {
+      stop("Unknown columns in ", table, ": ",
+           paste(missing_columns, collapse = ", "), call. = FALSE)
+    }
+  }
+  
+  character_cols <- header[
+    header %in% c("userId", "deviceId", "firmware", "email", "nationality") |
+      grepl("profile$", header)
+  ]
+  datetime_cols <- grep("(_ts|_at|_at_max)$|^bucket_(5min|hour)$", header, value = TRUE)
+  
+  types <- readr::cols(.default = readr::col_guess())
+  types$cols[character_cols] <- rep(list(readr::col_character()), length(character_cols))
+  types$cols[datetime_cols] <- rep(list(readr::col_datetime()), length(datetime_cols))
+  if ("date" %in% header) types$cols[["date"]] <- readr::col_date()
+  
+  read_columns <- if (is.null(columns)) header else columns
+  data <- readr::read_csv(
+    path, col_select = tidyselect::all_of(read_columns), col_types = types,
     locale = readr::locale(tz = "UTC"), na = c("", "NA", "NULL"),
     name_repair = "check_unique", show_col_types = FALSE, progress = FALSE
-  ))
-  if (nrow(readr::problems(data)) > 0) stop("Parsing failed for ", table, call. = FALSE)
-  if (!is.na(time_column)) {
-    date <- as.Date(data[[time_column]], tz = "UTC")
-    data <- data[!is.na(date) & date > start_date & date < end_date, ]
+  )
+  
+  readr::stop_for_problems(data)
+  data
+}
+
+
+# ---------------------------------------------------------------------------
+# Accounts
+# ---------------------------------------------------------------------------
+
+# Read active_accounts by default, or the complete accounts table.
+# This function does not filter participants or remove missing values.
+#
+# Examples:
+#   active_accounts <- read_trigger_accounts()
+#   accounts <- read_trigger_accounts("accounts")
+#   nationality <- read_trigger_accounts(columns = c("userId", "nationality"))
+
+read_trigger_accounts <- function(
+    table = c("active_accounts", "accounts"), data_dir = "data", columns = NULL
+) {
+  table <- match.arg(table)
+  .read_trigger_csv(table, data_dir = data_dir, columns = columns)
+}
+
+
+# ---------------------------------------------------------------------------
+# Read tidy data
+# ---------------------------------------------------------------------------
+
+# Read selected minute-level sensor tables (all by default).
+# Wide: one row per participant-minute, joined across sensors.
+# Long: one row per measurement, with source, variable and value.
+# Sensor measurements retain their original names and numeric types.
+
+read_tidy <- function(
+    tables = c("gps", "myair", "smartwatchhigh", "smartwatchlow"),
+    format = c("wide", "long"),
+    data_dir = "data"
+) {
+  format <- match.arg(format)
+  allowed <- c("gps", "myair", "smartwatchhigh", "smartwatchlow")
+  
+  if (!length(tables) || anyNA(tables) || anyDuplicated(tables) ||
+      !all(tables %in% allowed)) {
+    stop("Invalid tables. Choose from: ", paste(allowed, collapse = ", "), call. = FALSE)
   }
-  dplyr::select(data, tidyselect::all_of(columns))
-}
-
-read_trigger_active_accounts <- function(data_dir = "data", columns = c("userId", "nationality")) {
-  read_trigger_table("active_accounts", data_dir, columns)
-}
-
-# Read all five-minute sources with one row per variable and statistics in columns.
-# drop_na removes rows without measurements and with zero or missing n.
-# Technical metadata and sleeprate are skipped; duplicates are retained.
-read_trigger_5min <- function(data_dir = "data", drop_na = FALSE,
-  start_date = as.Date("2025-03-01"), end_date = as.Date(Sys.time(), tz = "UTC")) {
-  sources <- c("myair", "gps", "smartwatchhigh", "smartwatchlow")
-  tables <- lapply(sources, function(source) {
-    table <- paste0(source, "_5min")
-    path <- file.path(data_dir, "5min", paste0(table, ".csv.gz"))
-    columns <- names(readr::read_csv(path, n_max = 0, show_col_types = FALSE, name_repair = "check_unique"))
-    columns <- setdiff(columns, c("source_created_at_max", "deviceId", "firmware", "device_n", "firmware_n", "observed_minute_n"))
-    columns <- columns[!startsWith(columns, "sleeprate")]
-    data <- read_trigger_table(table, data_dir, columns, start_date, end_date)
-    data <- tidyr::pivot_longer(
-      data, cols = -tidyselect::any_of(c("userId", "bucket_5min")),
-      names_to = c("variable", ".value"), names_pattern = "^([^_]+)_(.+)$", values_drop_na = FALSE
-    )
-    if (drop_na) {
-      data <- dplyr::filter(data, !(is.na(mean) & is.na(min) & is.na(max) & (is.na(n) | n == 0)))
-    }
-    dplyr::mutate(data, origin = source, .before = 1)
+  
+  data <- purrr::map(tables, \(table) {
+    .read_trigger_csv(paste0(table, "_tidy"), data_dir) |>
+      dplyr::select(-tidyselect::any_of(c(
+        "deviceId", "firmware", "event_ts", "created_at", "bucket_5min", "sleeprate")))
   })
-  dplyr::bind_rows(tables)
+  
+  if (format == "wide") {
+    return(purrr::reduce(data, dplyr::full_join, by = c("userId", "minute_ts"),
+                         relationship = "one-to-one"))}
+  
+  purrr::map2_dfr(data, tables, \(x, table) {
+    x |>
+      tidyr::pivot_longer(
+        cols = -tidyselect::all_of(c("userId", "minute_ts")),
+        names_to = "variable", values_to = "value", values_drop_na = TRUE) |>
+      dplyr::mutate(source = table, .before = variable)
+  })
 }
 
-# Read one five-minute statistic per variable, without its column suffix.
-# Keep missing values and reject duplicate participant-time keys.
-read_trigger_5min_wide <- function(data_dir = "data", statistic = "mean",
-  start_date = as.Date("2025-03-01"), end_date = as.Date(Sys.time(), tz = "UTC")) {
-  statistic <- match.arg(statistic, c("mean", "min", "max"))
-  suffix <- paste0("_", statistic)
-  sources <- c("myair", "gps", "smartwatchhigh", "smartwatchlow")
+# ---------------------------------------------------------------------------
+# Read five-minute data
+# ---------------------------------------------------------------------------
+
+# Read selected sources (all by default); exclude metadata and sleeprate.
+# Wide: join sources by userId and bucket_5min.
+# Long: source, variable, mean, min, max and n; drop rows with all statistics NA.
+# only_mean = TRUE: remove "_mean" in wide; return variable/value without NA in long.
+#
+# Examples:
+#   read_5min()
+#   read_5min(only_mean = TRUE)
+#   read_5min(format = "long")
+#   read_5min(c("myair", "gps"), format = "long", only_mean = TRUE)
+
+read_5min <- function(tables = c("gps", "myair", "smartwatchhigh", "smartwatchlow"),
+                      format = c("wide", "long"), only_mean = TRUE, data_dir = "data") {
+  format <- match.arg(format)
+  allowed <- c("gps", "myair", "smartwatchhigh", "smartwatchlow")
   keys <- c("userId", "bucket_5min")
-  tables <- lapply(sources, function(source) {
-    table <- paste0(source, "_5min")
-    path <- file.path(data_dir, "5min", paste0(table, ".csv.gz"))
-    columns <- names(readr::read_csv(path, n_max = 0, show_col_types = FALSE, name_repair = "check_unique"))
-    columns <- c(keys, columns[endsWith(columns, suffix) & !startsWith(columns, "sleeprate")])
-    data <- read_trigger_table(table, data_dir, columns, start_date, end_date)
-    if (anyDuplicated(data[keys])) stop("Duplicate keys in ", table, call. = FALSE)
-    dplyr::rename_with(data, ~ sub(paste0(suffix, "$"), "", .x), -tidyselect::all_of(keys))
-  })
-  purrr::reduce(tables, ~ dplyr::full_join(.x, .y, by = keys, relationship = "one-to-one"))
-}
-
-# Read all hourly sources except sleeprate, retaining separate variable statistics.
-# Keep per-variable coverage; skip shared observed_* counts.
-read_trigger_hourly <- function(data_dir = "data",
-  start_date = as.Date("2025-03-01"), end_date = as.Date(Sys.time(), tz = "UTC")) {
-  sources <- c("myair", "gps", "smartwatchhigh", "smartwatchlow")
-  tables <- lapply(sources, function(source) {
-    table <- paste0(source, "_hourly")
-    path <- file.path(data_dir, "hourly", paste0(table, ".csv.gz"))
-    columns <- names(readr::read_csv(path, n_max = 0, show_col_types = FALSE, name_repair = "check_unique"))
-    columns <- setdiff(columns, c("source_created_at_max", "deviceId", "firmware",
-                                 "mixed_device_5min_n", "mixed_firmware_5min_n",
-                                 "observed_5min_n", "observed_minute_n"))
-    columns <- columns[!startsWith(columns, "sleeprate")]
-    data <- read_trigger_table(table, data_dir, columns, start_date, end_date)
-    data <- tidyr::pivot_longer(
-      data, cols = -tidyselect::any_of(c("userId", "hour_ts")),
-      names_to = c("variable", ".value"), names_pattern = "^([^_]+)_(.+)$", values_drop_na = FALSE
-    )
-    dplyr::mutate(data, origin = source, .before = 1)
-  })
-  dplyr::bind_rows(tables)
-}
-
-# Read daily measurements into value, with statistic mean, min, max or sleep.
-# Keep only per-variable coverage profiles; skip shared coverage and sleeprate.
-read_trigger_daily <- function(data_dir = "data",
-  start_date = as.Date("2025-03-01"), end_date = as.Date(Sys.time(), tz = "UTC")) {
-  sources <- c("myair", "gps", "smartwatchhigh", "smartwatchlow")
-  coverage <- c("hours_n", "five_min_n", "minute_n", "complete_hours_n", "five_min_profile")
-  tables <- lapply(sources, function(source) {
-    table <- paste0(source, "_daily")
-    path <- file.path(data_dir, "daily", paste0(table, ".csv.gz"))
-    columns <- names(readr::read_csv(path, n_max = 0, show_col_types = FALSE, name_repair = "check_unique"))
-    columns <- setdiff(columns, c(coverage, "source_created_at_max", "deviceId", "firmware",
-                                 "ambiguous_device_hour_n", "ambiguous_firmware_hour_n",
-                                 "mixed_device_5min_n", "mixed_firmware_5min_n"))
-    columns <- columns[!startsWith(columns, "sleeprate")]
-    columns <- columns[!grepl("_(hours_n|5min_n|minute_n)$", columns)]
-    data <- read_trigger_table(table, data_dir, columns, start_date, end_date)
-    data <- tidyr::pivot_longer(
-      data, cols = -tidyselect::any_of(c("userId", "date")),
-      names_to = c("variable", ".value"), names_pattern = "^([^_]+)_(.+)$", values_drop_na = FALSE
-    )
-    data <- tidyr::pivot_longer(
-      data, cols = tidyselect::all_of(c("mean", "min", "max")),
-      names_to = "statistic", values_to = "value", values_drop_na = FALSE
-    )
-    dplyr::mutate(data, origin = source, .before = 1)
-  })
-  path <- file.path(data_dir, "tidy", "sleep_tidy.csv.gz")
-  columns <- names(readr::read_csv(path, n_max = 0, show_col_types = FALSE, name_repair = "check_unique"))
-  columns <- setdiff(columns, c("created_at", "deviceId", "firmware"))
-  sleep <- read_trigger_table("sleep_tidy", data_dir, columns, start_date, end_date)
-  sleep <- tidyr::pivot_longer(sleep, cols = -tidyselect::all_of(c("userId", "date")),
-                              names_to = "variable", values_to = "value", values_drop_na = FALSE)
-  sleep <- dplyr::mutate(sleep, statistic = "sleep", .before = "value")
-  dplyr::bind_rows(tables, dplyr::mutate(sleep, origin = "sleep", .before = 1))
-}
-
-# Filter daily statistics by hourly bucket coverage; keep sleep unchanged.
-# Missing profiles fail the filter. Existing daily values are not recalculated.
-filter_trigger_daily <- function(data, min_buckets_per_hour, min_hours) {
-  stopifnot(length(min_buckets_per_hour) == 1, length(min_hours) == 1,
-            min_buckets_per_hour %in% 1:12, min_hours %in% 1:24)
-  profiles <- unique(data$`5min_profile`[data$statistic != "sleep"])
-  valid <- vapply(profiles, function(profile) {
-    if (is.na(profile)) return(FALSE)
-    counts <- jsonlite::fromJSON(profile)
-    if (length(counts) != 24 || anyNA(counts) || !all(counts %in% 0:12)) {
-      stop("Invalid daily coverage profile.", call. = FALSE)
-    }
-    sum(counts >= min_buckets_per_hour) >= min_hours
-  }, logical(1))
-  dplyr::filter(data, statistic == "sleep" | `5min_profile` %in% profiles[valid])
-}
-
-
-drop_suspect <- function(data, pm_limit = 500, pc_limit = 60000) {
-  pm <- c("pm1", "pm25", "pm10")
-  pc <- c("pc03", "pc05", "pc1", "pc25", "pc5", "pc10")
   
-  bad <- data %>%
-    filter(origin == "myair", variable %in% c(pm, pc)) %>%
-    select(userId, bucket_5min, variable, mean) %>%
-    pivot_wider(names_from = variable, values_from = mean) %>%
-    filter(
-      coalesce(pm1 > pm25 | pm25 > pm10 | pm1 > pm10, FALSE) |
-        coalesce(pc03 < pc05 | pc05 < pc1 | pc1 < pc25 |
-                   pc25 < pc5 | pc5 < pc10, FALSE) |
-        if_any(all_of(pm), ~ coalesce(.x >= pm_limit, FALSE)) |
-        if_any(all_of(pc), ~ coalesce(.x >= pc_limit, FALSE))
-    ) %>%
-    distinct(userId, bucket_5min) %>%
-    mutate(.drop = TRUE)
+  if (!length(tables) || anyNA(tables) || anyDuplicated(tables) || !all(tables %in% allowed))
+    stop("Invalid tables. Choose from: ", paste(allowed, collapse = ", "), call. = FALSE)
+  stopifnot(is.logical(only_mean), length(only_mean) == 1L, !is.na(only_mean))
   
-  data %>%
-    mutate(.drop = origin == "myair" & variable %in% c(pm, pc)) %>%
-    anti_join(bad, by = c("userId", "bucket_5min", ".drop")) %>%
-    select(-.drop)
+  data <- purrr::map(tables, \(table) {
+    x <- .read_trigger_csv(paste0(table, "_5min"), data_dir) |>
+      dplyr::select(-tidyselect::any_of(c("deviceId", "firmware", "source_created_at_max",
+                                          "device_n", "firmware_n", "observed_minute_n")),
+                    -tidyselect::matches("^sleeprate($|_)"))
+    if (only_mean) return(x |>
+                            dplyr::select(tidyselect::all_of(keys), tidyselect::ends_with("_mean")) |>
+                            dplyr::rename_with(~ sub("_mean$", "", .x), tidyselect::ends_with("_mean")))
+    dplyr::select(x, tidyselect::all_of(keys), tidyselect::matches("_(mean|min|max|n)$"))
+  })
+  
+  if (format == "wide")
+    return(purrr::reduce(data, dplyr::full_join, by = keys, relationship = "one-to-one"))
+  
+  purrr::map2_dfr(data, tables, \(x, table) {
+    if (only_mean) return(x |>
+                            tidyr::pivot_longer(-tidyselect::all_of(keys), names_to = "variable",
+                                                values_to = "value", values_drop_na = TRUE) |>
+                            dplyr::mutate(source = table, .before = variable))
+    x |>
+      tidyr::pivot_longer(-tidyselect::all_of(keys), names_to = c("variable", ".value"),
+                          names_pattern = "^(.*)_(mean|min|max|n)$") |>
+      dplyr::filter(dplyr::if_any(tidyselect::all_of(c("mean", "min", "max")), ~ !is.na(.x))) |>
+      dplyr::mutate(source = table, .before = variable)
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Read hourly data
+# ---------------------------------------------------------------------------
+
+# Read selected sources; retain statistics and valid five-minute bucket counts.
+# min_5min: minimum valid buckets per variable-hour (1–12).
+# Long: source, variable, value and n_5min; or mean/min/max and n_5min.
+# Wide: join sources by userId/hour_ts; remove "_mean" when only_mean = TRUE.
+# Exclude sleeprate, metadata and other coverage counts; drop missing measurements.
+#
+# Examples:
+#   read_hourly()
+#   read_hourly(format = "long", min_5min = 6)
+#   read_hourly(c("myair", "gps"), only_mean = FALSE, min_5min = 12)
+
+read_hourly <- function(tables = c("gps", "myair", "smartwatchhigh", "smartwatchlow"),
+                        format = c("long", "wide"), only_mean = FALSE,
+                        min_5min = 1, data_dir = "data") {
+  format <- match.arg(format)
+  allowed <- c("gps", "myair", "smartwatchhigh", "smartwatchlow")
+  keys <- c("userId", "hour_ts")
+  stats <- if (only_mean) "mean" else c("mean", "min", "max")
+  
+  if (!length(tables) || anyNA(tables) || anyDuplicated(tables) || !all(tables %in% allowed))
+    stop("Invalid tables. Choose from: ", paste(allowed, collapse = ", "), call. = FALSE)
+  stopifnot(is.logical(only_mean), length(only_mean) == 1L, !is.na(only_mean),
+            length(min_5min) == 1L, !is.na(min_5min), min_5min %in% 1:12)
+  
+  data <- purrr::map(tables, \(table) {
+    x <- .read_trigger_csv(paste0(table, "_hourly"), data_dir)
+    variables <- names(x) |> stringr::str_subset("_mean$") |> stringr::str_remove("_mean$")
+    variables <- variables[!stringr::str_detect(variables, "^sleeprate($|_)")]
+    columns <- purrr::map(variables, ~ paste0(.x, "_", c(stats, "5min_n"))) |> purrr::list_c()
+    
+    x |>
+      dplyr::select(tidyselect::all_of(c(keys, columns))) |>
+      dplyr::rename_with(~ sub("_5min_n$", "_n_5min", .x), tidyselect::ends_with("_5min_n")) |>
+      tidyr::pivot_longer(-tidyselect::all_of(keys), names_to = c("variable", ".value"),
+                          names_pattern = "^(.*)_(mean|min|max|n_5min)$") |>
+      dplyr::filter(n_5min >= min_5min,
+                    dplyr::if_any(tidyselect::all_of(stats), ~ !is.na(.x))) |>
+      dplyr::mutate(source = table, .before = variable)
+  })
+  
+  if (format == "long") {
+    x <- dplyr::bind_rows(data)
+    if (only_mean) x <- dplyr::rename(x, value = mean)
+    return(x)
+  }
+  
+  purrr::map(data, \(x) {
+    x <- x |>
+      dplyr::select(-source) |>
+      tidyr::pivot_wider(names_from = variable, values_from = tidyselect::all_of(c(stats, "n_5min")),
+                         names_glue = "{variable}_{.value}") |>
+      dplyr::rename_with(~ sub("_n_5min$", "_5min_n", .x), tidyselect::ends_with("_n_5min"))
+    if (only_mean) x <- dplyr::rename_with(x, ~ sub("_mean$", "", .x), tidyselect::ends_with("_mean"))
+    x
+  }) |>
+    purrr::reduce(dplyr::full_join, by = keys, relationship = "one-to-one")
+}
+
+
+# ---------------------------------------------------------------------------
+# Read daily data
+# ---------------------------------------------------------------------------
+
+# Read selected sources; retain statistics and per-variable daily profiles.
+# min_hours: minimum qualifying hours per day (1–24).
+# min_5min: minimum valid five-minute buckets per qualifying hour (1–12).
+# Filter each variable using its profile: a JSON array of 24 hourly bucket counts.
+# Preserve the original profile; exclude all other coverage counts and metadata.
+# Sleeprate and sleep data are excluded.
+#
+# Long: source, variable, value and profile; or mean/min/max and profile.
+# Wide: join sources by userId/date; retain <variable>_5min_profile.
+# only_mean = TRUE removes "_mean" from wide measurement names.
+# Missing measurements are removed before combining sources.
+# Filtering does not recalculate daily statistics.
+#
+# Examples:
+#   read_daily()
+#   read_daily(min_hours = 16, min_5min = 6)
+#   read_daily(format = "long", min_hours = 16, min_5min = 9)
+#   read_daily(c("myair", "gps"), only_mean = FALSE, min_hours = 12, min_5min = 6)
+
+read_daily <- function(tables = c("gps", "myair", "smartwatchhigh", "smartwatchlow"),
+                       format = c("long", "wide"), only_mean = FALSE,
+                       min_hours = 1, min_5min = 1, data_dir = "data") {
+  format <- match.arg(format)
+  allowed <- c("gps", "myair", "smartwatchhigh", "smartwatchlow")
+  keys <- c("userId", "date")
+  
+  if (!length(tables) || anyNA(tables) || anyDuplicated(tables) || !all(tables %in% allowed))
+    stop("Invalid tables. Choose from: ", paste(allowed, collapse = ", "), call. = FALSE)
+  stopifnot(is.logical(only_mean), length(only_mean) == 1L, !is.na(only_mean),
+            length(min_hours) == 1L, !is.na(min_hours), min_hours %in% 1:24,
+            length(min_5min) == 1L, !is.na(min_5min), min_5min %in% 1:12)
+  
+  stats <- if (only_mean) "mean" else c("mean", "min", "max")
+  data <- purrr::map(tables, \(table) {
+    x <- .read_trigger_csv(paste0(table, "_daily"), data_dir)
+    variables <- names(x) |> stringr::str_subset("_mean$") |> stringr::str_remove("_mean$")
+    variables <- variables[!stringr::str_detect(variables, "^sleeprate($|_)")]
+    columns <- purrr::map(variables, ~ paste0(.x, "_", c(stats, "5min_profile"))) |> purrr::list_c()
+    
+    x <- x |>
+      dplyr::select(tidyselect::all_of(c(keys, columns))) |>
+      dplyr::rename_with(~ sub("_5min_profile$", "_profile", .x),
+                         tidyselect::ends_with("_5min_profile")) |>
+      tidyr::pivot_longer(-tidyselect::all_of(keys), names_to = c("variable", ".value"),
+                          names_pattern = "^(.*)_(mean|min|max|profile)$")
+    
+    # Parse each distinct profile once; missing profiles fail the filter.
+    valid_profiles <- x |>
+      dplyr::distinct(profile) |>
+      dplyr::filter(purrr::map_lgl(profile, \(p)
+                                   !is.na(p) && sum(jsonlite::fromJSON(p) >= min_5min) >= min_hours))
+    
+    x |>
+      dplyr::semi_join(valid_profiles, by = "profile") |>
+      dplyr::filter(dplyr::if_any(tidyselect::all_of(stats), ~ !is.na(.x))) |>
+      dplyr::mutate(source = table, .before = variable)
+  })
+  
+  if (format == "long") {
+    x <- dplyr::bind_rows(data)
+    if (only_mean) x <- dplyr::rename(x, value = mean)
+    return(x)
+  }
+  
+  purrr::map(data, \(x) {
+    x <- x |>
+      dplyr::select(-source) |>
+      tidyr::pivot_wider(names_from = variable, values_from = tidyselect::all_of(c(stats, "profile")),
+                         names_glue = "{variable}_{.value}") |>
+      dplyr::rename_with(~ sub("_profile$", "_5min_profile", .x),
+                         tidyselect::ends_with("_profile"))
+    if (only_mean) x <- dplyr::rename_with(x, ~ sub("_mean$", "", .x), tidyselect::ends_with("_mean"))
+    x
+  }) |>
+    purrr::reduce(dplyr::full_join, by = keys, relationship = "one-to-one")
 }
