@@ -1,0 +1,301 @@
+---
+title: "Dataset overview"
+format:
+  html:
+    toc: true
+    code-fold: true
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+
+triggerR <- new.env()
+walk(c("R/read_data.R", "R/remove_future_observations.R"), ~source(.x, local = triggerR))
+
+if(!exists("trigger_5min")) trigger_5min <- triggerR$drop_future(triggerR$read_5min(format = "long",
+                                                                                    only_mean = FALSE))
+
+accounts <- triggerR$read_trigger_accounts(columns = c("userId", "nationality"))
+```
+
+## Total volume
+
+```{r}
+trigger_5min |>
+  summarise(
+    aggregates_n = n(),
+    measurements_n = sum(n, na.rm = TRUE),
+    participants_n = n_distinct(userId),
+    memory_size = format(object.size(trigger_5min), units = "auto"))
+```
+
+## Data sources
+
+Counts refer to valid minute-level measurements represented in five-minute aggregates.
+
+```{r}
+source_summary <- trigger_5min |>
+  group_by(source) |>
+  summarise(
+    measurements_n = sum(n, na.rm = TRUE),
+    participants_n = n_distinct(userId),
+    variables_n = n_distinct(variable),
+    .groups = "drop"
+  )
+
+source_summary
+```
+
+```{r}
+ggplot(source_summary, aes(reorder(source, measurements_n), measurements_n, fill = source)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_fill_brewer(palette = "Set1") +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(x = NULL, y = "# Measurements") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank())
+```
+
+## Measurements
+
+```{r}
+measurement_summary <- trigger_5min |>
+  group_by(source, variable) |>
+  summarise(measurements_n = sum(n, na.rm = TRUE), .groups = "drop") |>
+  arrange(source, desc(measurements_n)) |>
+  mutate(variable = factor(variable, levels = rev(variable)))
+```
+
+```{r}
+ggplot(measurement_summary, aes(variable, measurements_n, fill = source)) +
+  geom_col() +
+  geom_text(
+    aes(label = scales::label_number(
+      accuracy = 0.1, scale_cut = scales::cut_short_scale()
+    )(measurements_n)),
+    hjust = 0, nudge_y = max(measurement_summary$measurements_n) * 0.01, size = 3
+  ) +
+  coord_flip() +
+  scale_fill_brewer(palette = "Set1") +
+  scale_y_continuous(
+    labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+    expand = expansion(mult = c(0, 0.2))
+  ) +
+  labs(x = NULL, y = "# Measurements", fill = "Source") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank())
+```
+
+## Sampling density
+
+Distribution of valid minutes within observed five-minute buckets. Empty buckets are excluded.
+
+```{r}
+sampling_frequency <- trigger_5min |>
+  count(source, variable, minutes_n = n, name = "buckets_n") |>
+  group_by(source, variable) |>
+  mutate(percentage = buckets_n / sum(buckets_n)) |>
+  ungroup()
+```
+
+```{r, fig.width=7, fig.height=5}
+ggplot(sampling_frequency, aes(variable, percentage, fill = factor(minutes_n, levels = 1:5))) +
+  geom_col() +
+  coord_flip() +
+  facet_grid(source ~ ., scales = "free_y", space = "free_y") +
+  scale_fill_brewer(palette = "Set1", drop = FALSE) +
+  scale_y_continuous(labels = scales::label_percent()) +
+  labs(x = NULL, y = "Observed buckets (%)", fill = "Observed measurements\nwithin 5-min bucket") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank()) +
+  theme(legend.position = "bottom")
+```
+
+## Daily participants
+
+```{r}
+daily_participants <- trigger_5min |>
+  distinct(userId, date = as.Date(bucket_5min, tz = "UTC")) |>
+  left_join(accounts, by = "userId", relationship = "many-to-one") |>
+  mutate(nationality = replace_na(na_if(str_trim(nationality), ""), "Unknown")) |>
+  count(date, nationality, name = "participants_n") |>
+  complete(date = seq.Date(min(date), max(date), by = "day"), nationality,
+           fill = list(participants_n = 0L))
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 5
+
+ggplot(daily_participants, aes(date, participants_n, fill = nationality)) +
+  geom_area(position = "stack", colour = "white", linewidth = 0.2) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  labs(x = NULL, y = "Participants with observations", fill = "Nationality") +
+  theme_bw() +
+  theme(legend.position = "top", axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid.minor = element_blank()) +
+  coord_cartesian(xlim = c(as.Date("2025-04-01"), NA))
+```
+
+## Cumulative measurements
+
+```{r}
+daily_measurements <- trigger_5min |>
+  group_by(source, date = as.Date(bucket_5min, tz = "UTC")) |>
+  summarise(measurements_n = sum(n, na.rm = TRUE), .groups = "drop")
+
+cumulative_measurements <- bind_rows(
+  daily_measurements,
+  daily_measurements |>
+    group_by(date) |>
+    summarise(measurements_n = sum(measurements_n), .groups = "drop") |>
+    mutate(source = "total")
+) |>
+  complete(date = seq.Date(min(date), max(date), by = "day"), source,
+           fill = list(measurements_n = 0)) |>
+  arrange(source, date) |>
+  group_by(source) |>
+  mutate(cumulative_n = cumsum(measurements_n)) |>
+  ungroup()
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 5
+
+ggplot(cumulative_measurements, aes(date, cumulative_n, colour = source)) +
+  geom_line(linewidth = 0.8) +
+  scale_colour_manual(values = c(
+    gps = "#E41A1C", myair = "#A6A000", smartwatchhigh = "#00A878",
+    smartwatchlow = "#00A6D6", total = "#D650E0"
+  )) +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b %Y") +
+  labs(x = NULL, y = "Cumulative measurements", colour = "Source") +
+  theme_bw() +
+  theme(legend.position = "bottom", panel.grid.minor = element_blank()) +
+  coord_cartesian(xlim = c(as.Date("2025-04-01"), NA))
+```
+
+## Sampling continuity
+
+
+```{r}
+participant_info <- trigger_5min |>
+  distinct(userId) |>
+  left_join(accounts, by = "userId", relationship = "many-to-one") |>
+  mutate(nationality = replace_na(na_if(str_trim(nationality), ""), "Unknown")) |>
+  arrange(nationality, as.numeric(userId))
+
+daily_presence <- trigger_5min |>
+  distinct(source, userId, date = as.Date(bucket_5min, tz = "UTC")) |>
+  mutate(observed = TRUE) |>
+  left_join(participant_info, by = "userId", relationship = "many-to-one") |>
+  mutate(userId = factor(userId, levels = rev(participant_info$userId)))
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 9
+
+ggplot(daily_presence, aes(date, userId, fill = nationality)) +
+  geom_tile(width = 1, height = 0.9) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  coord_cartesian(xlim = c(as.Date("2025-04-01"), NA)) +
+  labs(x = NULL, y = "Participant", fill = "Nationality") +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    axis.text.y = element_text(size = 4),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+    panel.grid = element_blank())
+```
+
+
+```{r}
+#| fig-width: 12
+#| fig-height: 8
+
+ggplot(daily_presence, aes(date, userId, fill = nationality)) +
+  geom_tile(width = 1, height = 0.9) +
+  facet_grid(. ~ source) +
+  scale_y_discrete(drop = FALSE) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b %Y") +
+  coord_cartesian(xlim = c(as.Date("2025-04-01"), NA)) +
+  labs(x = NULL, y = "Participant", fill = "Nationality") +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    axis.text.y = element_text(size = 3.5),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+    strip.text = element_text(size = 8),
+    panel.grid = element_blank()
+  )
+```
+
+## Observed days per participant
+
+```{r}
+participant_days <- trigger_5min |>
+  distinct(userId, date = as.Date(bucket_5min, tz = "UTC")) |>
+  count(userId, name = "days_n") |>
+  left_join(participant_info, by = "userId", relationship = "many-to-one")
+```
+
+```{r}
+ggplot(participant_days, aes(nationality, days_n, fill = nationality)) +
+  geom_boxplot(width = 0.5, outlier.shape = NA, alpha = 0.7) +
+  geom_point(position = position_jitter(width = 0.15, height = 0, seed = 42),
+             size = 1.5, alpha = 0.6) +
+  labs(x = "Nationality", y = "Observed days") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_bw() +
+  theme(legend.position = "none", panel.grid.minor = element_blank())
+```
+
+## Participant contribution to total volume
+
+```{r}
+participant_contribution <- trigger_5min |>
+  group_by(userId) |>
+  summarise(measurements_n = sum(n, na.rm = TRUE), .groups = "drop") |>
+  arrange(desc(measurements_n)) |>
+  mutate(
+    participant_share = row_number() / n(),
+    measurement_share = cumsum(measurements_n) / sum(measurements_n)
+  )
+
+contribution_curve <- bind_rows(
+  tibble(participant_share = 0, measurement_share = 0),
+  select(participant_contribution, participant_share, measurement_share)
+)
+```
+
+```{r}
+#| fig-cap: "Cumulative contribution to total measurement volume, with participants ranked from highest to lowest contribution. Approximately 25% of participants account for 72% of measurements, and 50% account for 94%. The dashed line represents equal contributions. The concentration reflects differences in observation duration, sampling density and available measurements across participants."
+ggplot(contribution_curve, aes(participant_share, measurement_share)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_line(colour = "#0072B2", linewidth = 0.9) +
+  scale_x_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
+  scale_y_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
+  labs(x = "Participants ranked by contribution (%)", y = "Cumulative measurements (%)") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
+
+
+
+
+
+
+
+
+
+

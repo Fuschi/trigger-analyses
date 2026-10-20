@@ -28,11 +28,21 @@ observation_future <- trigger_tidy |>
 
 ## Export
 
-All columns are retained in a gzip-compressed CSV.
+Append newly identified observations, retaining distinct rows.
 
 ```{r}
-dir.create("data", showWarnings = FALSE, recursive = TRUE)
-readr::write_csv(observation_future, "data/future_observations.csv.gz")
+dir.create("../data", showWarnings = FALSE, recursive = TRUE)
+path <- "data/future_observations.csv.gz"
+
+archive <- if (file.exists(path)) {
+  readr::read_csv(path, col_types = readr::cols(
+    userId = readr::col_character(), minute_ts = readr::col_datetime()
+  ), show_col_types = FALSE)
+} else observation_future[0, ]
+
+bind_rows(archive, observation_future) |>
+  distinct() |>
+  readr::write_csv(path)
 ```
 
 ## Summary
