@@ -1,0 +1,253 @@
+---
+title: "Measurement correlations"
+format:
+  html:
+    toc: true
+    code-fold: true
+---
+
+```{r}
+#| include: false
+
+knitr::opts_knit$set(
+  root.dir = "/home/PERSONALE/alessandro.fuschi2/TRIGGER/trigger-analyses")
+```
+
+```{r}
+#| message: false
+
+library(tidyverse)
+
+triggerR <- new.env()
+walk(c("R/read_data.R", "R/remove_future_observations.R"),
+     ~ source(.x, local = triggerR))
+
+if (!exists("trigger_5min_wide"))
+  trigger_5min_wide <- triggerR$drop_future(
+    triggerR$read_5min(format = "wide", only_mean = TRUE))
+
+# Variable order shared by all matrices.
+variables <- c(
+  "pm1", "pm25", "pm10",
+  "pc03", "pc05", "pc1", "pc25", "pc5", "pc10",
+  "temperature", "humidity", "pressure", "sound", "light", "uvb",
+  "step", "cal",
+  "heartrate", "breathrate", "oxygens",
+  "bodytemp", "skintemp", "bphigh", "bplow"
+)
+```
+
+## Co-occurrence
+
+Number of participant–five-minute buckets with both measurements available. Diagonal cells show availability for each measurement.
+
+```{r}
+observed <- trigger_5min_wide |>
+  select(all_of(variables)) |>
+  as.matrix() |>
+  is.finite()
+
+cooccurrence_matrix <- crossprod(observed * 1)
+
+cooccurrence <- cooccurrence_matrix |>
+  as_tibble(rownames = "variable_1") |>
+  pivot_longer(
+    -variable_1,
+    names_to = "variable_2",
+    values_to = "buckets_n") |>
+  mutate(
+    variable_1 = factor(variable_1, levels = rev(variables)),
+    variable_2 = factor(variable_2, levels = variables))
+
+rm(observed)
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 10
+
+ggplot(cooccurrence, aes(variable_2, variable_1, fill = buckets_n)) +
+  geom_tile(colour = "white", linewidth = 0.2) +
+  geom_text(
+    aes(label = scales::label_number(
+      accuracy = 0.1,
+      scale_cut = scales::cut_short_scale()
+    )(buckets_n)),
+    size = 2.3
+  ) +
+  scale_fill_viridis_c(
+    trans = "sqrt",
+    begin = 0.35,
+    end = 0.95,
+    labels = scales::label_number(scale_cut = scales::cut_short_scale())
+  ) +
+  coord_equal() +
+  labs(x = NULL, y = NULL, fill = "Paired buckets") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
+```
+
+
+## Correlations
+
+Pooled Spearman correlations between five-minute means, using pairwise complete observations.
+
+```{r}
+correlation_matrix <- trigger_5min_wide |>
+  select(all_of(variables)) |>
+  cor(method = "spearman", use = "pairwise.complete.obs")
+
+correlations <- correlation_matrix |>
+  as_tibble(rownames = "variable_1") |>
+  pivot_longer(-variable_1, names_to = "variable_2", values_to = "rho") |>
+  mutate(
+    variable_1 = factor(variable_1, levels = rev(variables)),
+    variable_2 = factor(variable_2, levels = variables)
+  )
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 10
+
+ggplot(correlations, aes(variable_2, variable_1, fill = rho)) +
+  geom_tile(colour = "white", linewidth = 0.2) +
+  geom_text(aes(label = sprintf("%.2f", rho)), size = 2.3) +
+  scale_fill_gradient2(
+    low = "#2166AC", mid = "white", high = "#B2182B",
+    midpoint = 0, limits = c(-1, 1), na.value = "grey90"
+  ) +
+  coord_equal() +
+  labs(x = NULL, y = NULL, fill = "Spearman ρ") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
+```
+
+## Within-participant correlations
+
+Median participant-specific Spearman correlations. Each correlation requires at least 100 paired five-minute buckets.
+
+```{r}
+participant_correlations <- trigger_5min_wide |>
+  select(userId, all_of(variables)) |>
+  group_by(userId) |>
+  group_modify(\(.x, .y) {
+    x <- as.matrix(.x)
+    x[!is.finite(x)] <- NA_real_
+
+    paired_n <- crossprod(!is.na(x) * 1)
+    rho <- cor(x, method = "spearman", use = "pairwise.complete.obs")
+    rho[paired_n < 100] <- NA_real_
+
+    rho |>
+      as_tibble(rownames = "variable_1") |>
+      pivot_longer(-variable_1, names_to = "variable_2", values_to = "rho")
+  }) |>
+  ungroup()
+```
+
+
+```{r}
+within_correlations <- participant_correlations |>
+  group_by(variable_1, variable_2) |>
+  summarise(
+    participants_n = sum(!is.na(rho)),
+    median_rho = if (all(is.na(rho))) NA_real_ else median(rho, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    median_rho = if_else(participants_n >= 10, median_rho, NA_real_),
+    variable_1 = factor(variable_1, levels = rev(variables)),
+    variable_2 = factor(variable_2, levels = variables)
+  )
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 10
+
+ggplot(within_correlations, aes(variable_2, variable_1, fill = median_rho)) +
+  geom_tile(colour = "white", linewidth = 0.2) +
+  geom_text(
+    aes(label = if_else(is.na(median_rho), "", sprintf("%.2f", median_rho))),
+    size = 2.3
+  ) +
+  scale_fill_gradient2(
+    low = "#2166AC", mid = "white", high = "#B2182B",
+    midpoint = 0, limits = c(-1, 1), na.value = "grey90"
+  ) +
+  coord_equal() +
+  labs(x = NULL, y = NULL, fill = "Median\nSpearman ρ") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
+```
+
+
+## Participant-centered correlations
+
+Pearson correlations between deviations from participant-specific means.
+
+```{r}
+# centered_data <- trigger_5min_wide |>
+#   select(userId, all_of(variables)) |>
+#   group_by(userId) |>
+#   mutate(across(all_of(variables), ~ .x - mean(.x, na.rm = TRUE))) |>
+#   ungroup()
+
+particles <- c("pm1", "pm25", "pm10",
+               "pc03", "pc05", "pc1", "pc25", "pc5", "pc10")
+
+centered_data <- trigger_5min_wide |>
+  select(userId, all_of(variables)) |>
+  mutate(across(all_of(particles), log1p)) |>
+  group_by(userId) |>
+  mutate(across(all_of(variables), ~ .x - mean(.x, na.rm = TRUE))) |>
+  ungroup()
+
+centered_matrix <- centered_data |>
+  select(all_of(variables)) |>
+  cor(method = "pearson", use = "pairwise.complete.obs")
+
+centered_correlations <- centered_matrix |>
+  as_tibble(rownames = "variable_1") |>
+  pivot_longer(-variable_1, names_to = "variable_2", values_to = "rho") |>
+  mutate(
+    variable_1 = factor(variable_1, levels = rev(variables)),
+    variable_2 = factor(variable_2, levels = variables)
+  )
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 10
+
+ggplot(centered_correlations, aes(variable_2, variable_1, fill = rho)) +
+  geom_tile(colour = "white", linewidth = 0.2) +
+  geom_text(
+    aes(label = if_else(is.na(rho), "", sprintf("%.2f", rho))),
+    size = 2.3
+  ) +
+  scale_fill_gradient2(
+    low = "#2166AC", mid = "white", high = "#B2182B",
+    midpoint = 0, limits = c(-1, 1), na.value = "grey90"
+  ) +
+  coord_equal() +
+  labs(x = NULL, y = NULL, fill = "Centered\nPearson r") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
+```
+
+
+

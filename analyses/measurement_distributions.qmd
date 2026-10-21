@@ -1,0 +1,203 @@
+---
+title: "Measurement distributions"
+format:
+  html:
+    toc: true
+    code-fold: true
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+
+triggerR <- new.env()
+walk(c("R/read_data.R", "R/remove_future_observations.R"),
+     ~ source(.x, local = triggerR))
+
+if (!exists("trigger_5min_mean"))
+  trigger_5min_mean <- triggerR$drop_future(
+    triggerR$read_5min(format = "long", only_mean = TRUE))
+```
+
+## Five-minute distributions
+
+### Overall means 
+
+```{r}
+#| fig-width: 16
+#| fig-height: 18
+
+ggplot(trigger_5min_mean, aes(value, fill = source)) +
+  geom_histogram(bins = 60, colour = "white", linewidth = 0.15) +
+  facet_wrap(~ variable, scales = "free", ncol = 4) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = "Five-minute mean", y = "Observed buckets", fill = "Source") +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(size = 11))
+```
+
+### Means by participant
+
+```{r}
+#| fig-width: 18
+#| fig-height: 40
+
+ggplot(trigger_5min_mean,
+       aes(factor(userId), value, fill = source)) +
+  geom_boxplot(outlier.shape = NA, linewidth = 0.2) +
+  facet_wrap(~ variable, scales = "free_y", ncol = 1) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = "Participant", y = "Five-minute mean", fill = "Source") +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 4),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(size = 10)
+  )
+```
+
+
+## Hourly distributions
+
+```{r}
+if (!exists("trigger_hour_stats"))
+  trigger_hour_stats <- triggerR$drop_future(
+    triggerR$read_hourly(format = "long", only_mean = FALSE, min_5min = 4))
+```
+
+### Overall means and ranges
+
+```{r}
+#| fig-width: 16
+#| fig-height: 18
+
+walk(c("mean", "delta"), \(stat) {
+  p <- trigger_hour_stats |>
+    mutate(delta = max - min) |>
+    ggplot(aes(.data[[stat]], fill = source)) +
+    geom_histogram(bins = 60, colour = "white", linewidth = 0.15) +
+    facet_wrap(~ variable, scales = "free", ncol = 4) +
+    scale_fill_brewer(palette = "Set1") +
+    labs(x = paste("Hourly", stat), y = "Observed hours", fill = "Source") +
+    theme_bw() +
+    theme(
+      legend.position = "top",
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(size = 11)
+    )
+
+  print(p)
+})
+```
+
+### Overall means and ranges by partecipants
+
+```{r}
+#| fig-width: 18
+#| fig-height: 40
+
+walk(c("mean", "delta"), \(stat) {
+  p <- trigger_hour_stats |>
+    mutate(delta = max - min) |>
+    ggplot(aes(factor(userId), .data[[stat]], fill = source)) +
+    geom_boxplot(outlier.shape = NA, linewidth = 0.2) +
+    facet_wrap(~ variable, scales = "free_y", ncol = 1) +
+    scale_fill_brewer(palette = "Set1") +
+    labs(x = "Participant", y = paste("Hourly", stat), fill = "Source") +
+    theme_bw() +
+    theme(
+      legend.position = "top",
+      axis.text.x = element_text(angle = 90, hjust = 1, size = 4),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(size = 10)
+    )
+
+  print(p)
+})
+```
+
+## Daily distributions
+
+```{r}
+if (!exists("trigger_day_stats"))
+  trigger_day_stats <- triggerR$drop_future(
+    triggerR$read_daily(format = "long", only_mean = FALSE,
+                        min_5min = 3, min_hours = 16))
+```
+
+### Overall means and ranges
+
+```{r}
+#| fig-width: 16
+#| fig-height: 18
+
+walk(c("mean", "delta"), \(stat) {
+  p <- trigger_day_stats |>
+    mutate(delta = max - min) |>
+    ggplot(aes(.data[[stat]], fill = source)) +
+    geom_histogram(bins = 60, colour = "white", linewidth = 0.15) +
+    facet_wrap(~ variable, scales = "free", ncol = 4) +
+    scale_fill_brewer(palette = "Set1") +
+    labs(x = paste("Daily", stat), y = "Observed days", fill = "Source") +
+    theme_bw() +
+    theme(
+      legend.position = "top",
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(size = 11)
+    )
+
+  print(p)
+})
+```
+
+### Overall means and ranges by partecipants
+
+```{r}
+#| fig-width: 18
+#| fig-height: 40
+
+walk(c("mean", "delta"), \(stat) {
+  p <- trigger_day_stats |>
+    mutate(delta = max - min) |>
+    ggplot(aes(factor(userId), .data[[stat]], fill = source)) +
+    geom_boxplot(outlier.shape = NA, linewidth = 0.2) +
+    facet_wrap(~ variable, scales = "free_y", ncol = 1) +
+    scale_fill_brewer(palette = "Set1") +
+    labs(x = "Participant", y = paste("Daily", stat), fill = "Source") +
+    theme_bw() +
+    theme(
+      legend.position = "top",
+      axis.text.x = element_text(angle = 90, hjust = 1, size = 4),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(size = 10)
+    )
+
+  print(p)
+})
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
