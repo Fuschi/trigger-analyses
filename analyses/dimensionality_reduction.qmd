@@ -1,0 +1,318 @@
+---
+title: "dimensionality_reduction"
+editor: visual
+---
+
+```{r}
+#| include: false
+
+knitr::opts_knit$set(
+  root.dir = "/home/PERSONALE/alessandro.fuschi2/TRIGGER/trigger-analyses")
+```
+
+```{r}
+#| message: false
+
+library(tidyverse)
+
+triggerR <- new.env()
+walk(c("R/read_data.R", "R/remove_future_observations.R", "R/transform_means.R"),
+     ~ source(.x, local = triggerR))
+
+if (!exists("trigger_hourly_wide_tans")){
+  trigger_hourly_wide_tans <- triggerR$read_hourly(format = "wide",
+                                                  only_mean = TRUE,
+                                                  min_5min = 6) %>%
+    triggerR$drop_future() %>%
+    triggerR$transform_means() %>%
+    pluck("data") %>%
+    select(-starts_with(c("accuracy", "longitude", "latitude"))) %>%
+    select(-ends_with("5min_n"))
+  }
+
+env_vars <- c("particle_PC1", "particle_PC2", "temperature", "humidity",
+              "pressure", "sound", "light")
+phy_vars <- c("heartrate", "breathrate", "bodytemp", "skintemp", "step",
+              "bplow", "bphigh", "oxygens")
+```
+
+```{r}
+coverage <- imap_dfr(
+  list(
+    environmental = env_vars,
+    physiological = phy_vars,
+    physiological_without_oxygens = setdiff(phy_vars, "oxygens")
+  ),
+  \(vars, block) {
+    available <- trigger_hourly_wide_tans |>
+      filter(if_any(all_of(vars), is.finite))
+
+    complete <- available |>
+      filter(if_all(all_of(vars), is.finite))
+
+    tibble(
+      block = block,
+      available_buckets_n = nrow(available),
+      complete_buckets_n = nrow(complete),
+      retained_pct = 100 * nrow(complete) / nrow(available),
+      available_participants_n = n_distinct(available$userId),
+      complete_participants_n = n_distinct(complete$userId)
+    )
+  }
+)
+
+coverage
+```
+
+```{r}
+imap_dfr(
+  set_names(phy_vars),
+  \(excluded, name) {
+    complete <- trigger_hourly_wide_tans |>
+      filter(if_all(all_of(setdiff(phy_vars, excluded)), is.finite))
+
+    tibble(
+      excluded = excluded,
+      complete_buckets_n = nrow(complete),
+      participants_n = n_distinct(complete$userId)
+    )
+  }
+) |>
+  arrange(desc(complete_buckets_n))
+```
+
+```{r}
+phy_vars_filt <- setdiff(phy_vars, c("oxygens","breathrate"))
+```
+
+```{r}
+phy_complete <- trigger_hourly_wide_tans |>
+  select(userId, hour_ts, all_of(phy_vars_filt)) |>
+  filter(if_all(all_of(phy_vars_filt), is.finite))
+
+variance_summary <- map(phy_vars_filt, \(variable) {
+  x <- phy_complete[[variable]]
+
+  tibble(
+    variable = variable,
+    mean = mean(x),
+    variance = var(x),
+    sd = sd(x),
+    iqr = IQR(x),
+    distinct_n = n_distinct(x)
+  )
+}) |>
+  list_rbind()
+
+variance_summary
+```
+
+## Physiological PCA
+
+PCA of five-minute physiological and activity means. Variables are standardized; steps are already log-transformed. No participant-specific centering is applied.
+
+```{r}
+phy_pca <- phy_complete |>
+  select(all_of(phy_vars_filt)) |>
+  prcomp(center = TRUE, scale. = TRUE)
+
+phy_variance <- tibble(
+  component = factor(
+    paste0("PC", seq_along(phy_pca$sdev)),
+    levels = paste0("PC", seq_along(phy_pca$sdev))
+  ),
+  variance = phy_pca$sdev^2 / sum(phy_pca$sdev^2)
+) |>
+  mutate(cumulative = cumsum(variance))
+
+phy_variance
+```
+
+### Explained variance
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4
+
+ggplot(phy_variance, aes(component, variance)) +
+  geom_col(fill = "#0072B2") +
+  geom_point(aes(y = cumulative), colour = "#D55E00", size = 2) +
+  geom_line(aes(y = cumulative, group = 1), colour = "#D55E00") +
+  scale_y_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
+  labs(x = NULL, y = "Explained variance",
+       caption = "Bars: individual components. Orange line: cumulative variance.") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
+### Loadings
+
+Weights of each variable in the first three components.
+
+```{r}
+phy_loadings <- phy_pca$rotation[, 1:3] |>
+  as_tibble(rownames = "variable") |>
+  pivot_longer(-variable, names_to = "component", values_to = "loading") |>
+  mutate(variable = factor(variable, levels = rev(phy_vars_filt)))
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+
+ggplot(phy_loadings, aes(loading, variable, fill = component)) +
+  geom_col(show.legend = FALSE) +
+  geom_vline(xintercept = 0, colour = "grey40") +
+  facet_wrap(~ component, nrow = 1) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = "Loading", y = NULL) +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank())
+```
+
+### Participant scores
+
+PCA scores for the ten participants with the most complete buckets. Up to 2,000 observations per participant are displayed; PCA was fitted using all complete observations.
+
+```{r}
+top_participants <- phy_complete |>
+  count(userId, sort = TRUE) |>
+  slice_head(n = 15)
+
+phy_scores <- phy_complete |>
+  select(userId, hour_ts) |>
+  bind_cols(as_tibble(phy_pca$x[, 1:2])) |>
+  mutate(participant = factor(
+    userId,
+    levels = top_participants$userId
+  ))
+```
+
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+#| dev: png
+#| fig-dpi: 150
+
+factoextra::fviz_pca_biplot(
+  phy_pca,
+  geom.ind = "point",
+  col.ind = "#0072B2",
+  alpha.ind = 0.1,
+  pointsize = 0.3,
+  col.var = "#B2182B",
+  label = "var",
+  repel = TRUE,
+  ggtheme = theme_bw())
+```
+
+
+```{r}
+ggplot(phy_scores, aes(PC1, PC2)) +
+  geom_bin_2d(bins = 100) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  coord_equal() +
+  labs(x = "PC1", y = "PC2", fill = "Observations") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
+
+```{r}
+phy_scores |>
+  left_join(
+    phy_complete |>
+      select(userId, hour_ts, step, bodytemp, skintemp),
+    by = c("userId", "hour_ts"),
+    relationship = "one-to-one"
+  ) |>
+  ggplot(aes(PC1, PC2)) +
+  geom_bin_2d(bins = 80) +
+  facet_wrap(~ if_else(step == 0, "No recorded steps", "Recorded steps")) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  coord_equal() +
+  labs(fill = "Observations") +
+  theme_bw()
+```
+
+```{r}
+set.seed(42)
+
+umap_data <- phy_complete |>
+  slice_sample(n = min(50000, nrow(phy_complete)))
+
+# umap_input <- umap_data |>
+#   select(all_of(phy_vars_filt)) |>
+#   scale()
+
+
+umap_input <- umap_data |>
+ select(all_of(phy_vars_filt)) 
+
+med <- apply(umap_input, 2, median)
+i_qr <- apply(umap_input, 2, IQR)
+umap_input <- (umap_input - med) / i_qr
+
+set.seed(42)
+
+phy_umap <- uwot::umap(
+  umap_input,
+  n_neighbors = 30,
+  min_dist = 0.2,
+  metric = "euclidean",
+  n_threads = 4,
+  n_sgd_threads = 1,
+  verbose = TRUE
+)
+
+umap_scores <- umap_data |>
+  mutate(
+    UMAP1 = phy_umap[, 1],
+    UMAP2 = phy_umap[, 2],
+    activity = if_else(step == 0, "No recorded steps", "Recorded steps")
+  )
+
+accounts <- triggerR$read_trigger_accounts()
+umap_scores <- umap_scores %>%
+  left_join(select(accounts, userId, nationality))
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 7
+
+ggplot(umap_scores, aes(UMAP1, UMAP2, colour = nationality)) +
+  geom_point(alpha = 0.25, size = 0.4) +
+  # scale_colour_manual(values = c(
+  #   "No recorded steps" = "#0072B2",
+  #   "Recorded steps" = "#D55E00"
+  # )) +
+  coord_equal() +
+  labs(x = "UMAP 1", y = "UMAP 2", colour = NULL) +
+  theme_bw() +
+  theme(legend.position = "top", panel.grid.minor = element_blank())
+```
+
+```{r}
+#| fig-width: 16
+#| fig-height: 14
+
+plots <- map(phy_vars_filt, \(variable) {
+  ggplot(umap_scores, aes(UMAP1, UMAP2, colour = .data[[variable]])) +
+    geom_point(size = 0.25, alpha = 0.5) +
+    scale_colour_gradientn(
+      colours = rev(RColorBrewer::brewer.pal(11, "Spectral"))
+    ) +
+    coord_equal() +
+    labs(
+      title = variable, x = "UMAP 1", y = "UMAP 2",
+      colour = if (variable == "step") "log1p(step)" else "Value"
+    ) +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank())
+})
+
+patchwork::wrap_plots(plots, ncol = 3)
+```
+
