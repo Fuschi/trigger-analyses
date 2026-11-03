@@ -19,6 +19,9 @@ triggerR <- new.env()
 walk(c("R/read_data.R", "R/remove_future_observations.R", "R/transform_means.R"),
      ~ source(.x, local = triggerR))
 
+accounts <- triggerR$read_trigger_accounts() %>%
+  select(userId, nationality)
+
 if (!exists("trigger_hourly_wide_tans")){
   trigger_hourly_wide_tans <- triggerR$read_hourly(format = "wide",
                                                   only_mean = TRUE,
@@ -37,48 +40,68 @@ phy_vars <- c("heartrate", "breathrate", "bodytemp", "skintemp", "step",
 ```
 
 ```{r}
-coverage <- imap_dfr(
-  list(
-    environmental = env_vars,
-    physiological = phy_vars,
-    physiological_without_oxygens = setdiff(phy_vars, "oxygens")
-  ),
-  \(vars, block) {
-    available <- trigger_hourly_wide_tans |>
-      filter(if_any(all_of(vars), is.finite))
-
-    complete <- available |>
-      filter(if_all(all_of(vars), is.finite))
+coverage <- list(
+  environmental = env_vars,
+  physiological = phy_vars,
+  physiological_without_oxygens = setdiff(phy_vars, "oxygens"),
+  physiological_without_breathrate = setdiff(phy_vars, "breathrate"),
+  physiological_without_oxygens_breathrate = setdiff(phy_vars, c("oxygens", "breathrate")),
+  combined = c(env_vars, phy_vars),
+  combined_without_oxygens = c(env_vars, setdiff(phy_vars, "oxygens")),
+  combined_without_oxygens_breathrate = c(env_vars, setdiff(phy_vars, c("oxygens", "breathrate")))) %>%
+  imap(\(vars, block) {
+    available <- trigger_hourly_wide_tans |> filter(if_any(all_of(vars), is.finite))
+    complete <- available |> filter(if_all(all_of(vars), is.finite))
 
     tibble(
       block = block,
-      available_buckets_n = nrow(available),
-      complete_buckets_n = nrow(complete),
+      available_buckets_n = nrow(available), complete_buckets_n = nrow(complete),
       retained_pct = 100 * nrow(complete) / nrow(available),
       available_participants_n = n_distinct(available$userId),
       complete_participants_n = n_distinct(complete$userId)
-    )
-  }
-)
-
-coverage
+    )}) |> list_rbind()
 ```
 
 ```{r}
-imap_dfr(
-  set_names(phy_vars),
-  \(excluded, name) {
-    complete <- trigger_hourly_wide_tans |>
-      filter(if_all(all_of(setdiff(phy_vars, excluded)), is.finite))
+#| fig-width: 6
+#| fig-height: 3
+#| fig-cap: Percentage of complete hourly observations across variable sets. Environmental data show high completeness (96.5%), while excluding oxygen saturation and respiratory rate substantially improves physiological completeness (48.3%) and combined completeness (11.1%).
 
-    tibble(
-      excluded = excluded,
-      complete_buckets_n = nrow(complete),
-      participants_n = n_distinct(complete$userId)
-    )
-  }
-) |>
-  arrange(desc(complete_buckets_n))
+coverage |>
+  mutate(block = factor(block, levels = rev(block))) |>
+  ggplot(aes(retained_pct, block, fill = block)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = sprintf("%.1f%%", retained_pct)), hjust = -0.15, size = 3.5) +
+  ggqualpal::scale_fill_qualpal() +
+  scale_x_continuous(limits = c(0, 110), breaks = seq(0, 100, 20)) +
+  labs(x = "Complete observations (%)", y = NULL) +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank())
+```
+
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4.5
+#| fig-caption: Number of complete hourly observations after excluding each physiological variable individually. Oxygen saturation (oxygens) and respiratory rate (breathrate) are the main limiting variables, increasing complete observations from 16,977 to 81,364 and 46,878, respectively, when excluded.
+
+map(phy_vars, \(excluded) {
+  complete <- trigger_hourly_wide_tans |>
+    filter(if_all(all_of(setdiff(phy_vars, excluded)), is.finite))
+
+  tibble(excluded = excluded, complete_buckets_n = nrow(complete),
+         participants_n = n_distinct(complete$userId))
+}) |>
+  list_rbind() |>
+  ggplot(aes(complete_buckets_n, fct_reorder(excluded, complete_buckets_n), fill = excluded)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = scales::label_comma()(complete_buckets_n)), hjust = -0.15, size = 3.5) +
+  scale_fill_brewer(palette = "Set1") +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "Complete hourly observations", y = "Excluded variable") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank())
 ```
 
 ```{r}
@@ -92,17 +115,9 @@ phy_complete <- trigger_hourly_wide_tans |>
 
 variance_summary <- map(phy_vars_filt, \(variable) {
   x <- phy_complete[[variable]]
-
-  tibble(
-    variable = variable,
-    mean = mean(x),
-    variance = var(x),
-    sd = sd(x),
-    iqr = IQR(x),
-    distinct_n = n_distinct(x)
-  )
-}) |>
-  list_rbind()
+  tibble(variable, mean = mean(x), median = median(x), variance = var(x), 
+         sd = sd(x), iqr = IQR(x), distinct_n = n_distinct(x))
+}) |> list_rbind()
 
 variance_summary
 ```
@@ -117,30 +132,23 @@ phy_pca <- phy_complete |>
   prcomp(center = TRUE, scale. = TRUE)
 
 phy_variance <- tibble(
-  component = factor(
-    paste0("PC", seq_along(phy_pca$sdev)),
-    levels = paste0("PC", seq_along(phy_pca$sdev))
-  ),
+  component = factor(paste0("PC", seq_along(phy_pca$sdev))),
   variance = phy_pca$sdev^2 / sum(phy_pca$sdev^2)
-) |>
-  mutate(cumulative = cumsum(variance))
-
-phy_variance
+) |> mutate(cumulative = cumsum(variance))
 ```
 
 ### Explained variance
 
 ```{r}
-#| fig-width: 8
-#| fig-height: 4
+#| fig-width: 6
+#| fig-height: 3
 
 ggplot(phy_variance, aes(component, variance)) +
   geom_col(fill = "#0072B2") +
-  geom_point(aes(y = cumulative), colour = "#D55E00", size = 2) +
   geom_line(aes(y = cumulative, group = 1), colour = "#D55E00") +
+  geom_point(aes(y = cumulative), colour = "#D55E00", size = 2) +
   scale_y_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
-  labs(x = NULL, y = "Explained variance",
-       caption = "Bars: individual components. Orange line: cumulative variance.") +
+  labs(x = NULL, y = "Explained variance") +
   theme_bw() +
   theme(panel.grid.minor = element_blank())
 ```
@@ -157,8 +165,8 @@ phy_loadings <- phy_pca$rotation[, 1:3] |>
 ```
 
 ```{r}
-#| fig-width: 10
-#| fig-height: 5
+#| fig-width: 7
+#| fig-height: 2.5
 
 ggplot(phy_loadings, aes(loading, variable, fill = component)) +
   geom_col(show.legend = FALSE) +
@@ -171,40 +179,26 @@ ggplot(phy_loadings, aes(loading, variable, fill = component)) +
         panel.grid.minor = element_blank())
 ```
 
-### Participant scores
-
-PCA scores for the ten participants with the most complete buckets. Up to 2,000 observations per participant are displayed; PCA was fitted using all complete observations.
-
 ```{r}
-top_participants <- phy_complete |>
-  count(userId, sort = TRUE) |>
-  slice_head(n = 15)
-
-phy_scores <- phy_complete |>
-  select(userId, hour_ts) |>
-  bind_cols(as_tibble(phy_pca$x[, 1:2])) |>
-  mutate(participant = factor(
-    userId,
-    levels = top_participants$userId
-  ))
-```
-
-```{r}
-#| fig-width: 8
-#| fig-height: 8
-#| dev: png
-#| fig-dpi: 150
+#| fig-width: 5
+#| fig-height: 5
 
 factoextra::fviz_pca_biplot(
   phy_pca,
   geom.ind = "point",
   col.ind = "#0072B2",
-  alpha.ind = 0.1,
-  pointsize = 0.3,
+  alpha.ind = 0.05,
+  pointsize = 0.1,
   col.var = "#B2182B",
   label = "var",
   repel = TRUE,
   ggtheme = theme_bw())
+```
+
+```{r}
+phy_scores <- phy_complete |>
+  select(userId, hour_ts) |>
+  bind_cols(as_tibble(phy_pca$x[, 1:2]))
 ```
 
 
@@ -217,7 +211,6 @@ ggplot(phy_scores, aes(PC1, PC2)) +
   theme_bw() +
   theme(panel.grid.minor = element_blank())
 ```
-
 
 ```{r}
 phy_scores |>
@@ -238,56 +231,26 @@ phy_scores |>
 
 ```{r}
 set.seed(42)
+umap_data <- phy_complete |> slice_sample(n = min(50000, nrow(phy_complete)))
+umap_input <- umap_data |> select(all_of(phy_vars_filt)) |> scale()
 
-umap_data <- phy_complete |>
-  slice_sample(n = min(50000, nrow(phy_complete)))
-
-# umap_input <- umap_data |>
-#   select(all_of(phy_vars_filt)) |>
-#   scale()
-
-
-umap_input <- umap_data |>
- select(all_of(phy_vars_filt)) 
-
-med <- apply(umap_input, 2, median)
-i_qr <- apply(umap_input, 2, IQR)
-umap_input <- (umap_input - med) / i_qr
-
-set.seed(42)
-
-phy_umap <- uwot::umap(
-  umap_input,
-  n_neighbors = 30,
-  min_dist = 0.2,
-  metric = "euclidean",
-  n_threads = 4,
-  n_sgd_threads = 1,
-  verbose = TRUE
-)
+phy_umap <- uwot::umap(umap_input, n_neighbors = 30, min_dist = 0.2,
+                      metric = "euclidean", n_threads = 4, n_sgd_threads = 1)
 
 umap_scores <- umap_data |>
-  mutate(
-    UMAP1 = phy_umap[, 1],
-    UMAP2 = phy_umap[, 2],
-    activity = if_else(step == 0, "No recorded steps", "Recorded steps")
-  )
-
-accounts <- triggerR$read_trigger_accounts()
-umap_scores <- umap_scores %>%
-  left_join(select(accounts, userId, nationality))
+  mutate(UMAP1 = phy_umap[, 1], UMAP2 = phy_umap[, 2],
+         activity = if_else(step == 0, "No recorded steps", "Recorded steps"))
 ```
 
 ```{r}
 #| fig-width: 10
 #| fig-height: 7
 
-ggplot(umap_scores, aes(UMAP1, UMAP2, colour = nationality)) +
+ggplot(umap_scores, aes(UMAP1, UMAP2, color = activity)) +
   geom_point(alpha = 0.25, size = 0.4) +
-  # scale_colour_manual(values = c(
-  #   "No recorded steps" = "#0072B2",
-  #   "Recorded steps" = "#D55E00"
-  # )) +
+  scale_colour_manual(values = c(
+    "No recorded steps" = "#0072B2",
+    "Recorded steps" = "#D55E00")) +
   coord_equal() +
   labs(x = "UMAP 1", y = "UMAP 2", colour = NULL) +
   theme_bw() +
@@ -296,23 +259,175 @@ ggplot(umap_scores, aes(UMAP1, UMAP2, colour = nationality)) +
 
 ```{r}
 #| fig-width: 16
-#| fig-height: 14
+#| fig-height: 12
 
-plots <- map(phy_vars_filt, \(variable) {
+plots <- map(phy_vars_filt, \(variable)
   ggplot(umap_scores, aes(UMAP1, UMAP2, colour = .data[[variable]])) +
     geom_point(size = 0.25, alpha = 0.5) +
-    scale_colour_gradientn(
-      colours = rev(RColorBrewer::brewer.pal(11, "Spectral"))
-    ) +
+    scale_colour_gradientn(colours = rev(RColorBrewer::brewer.pal(11, "Spectral"))) +
     coord_equal() +
-    labs(
-      title = variable, x = "UMAP 1", y = "UMAP 2",
-      colour = if (variable == "step") "log1p(step)" else "Value"
-    ) +
+    labs(title = variable, x = "UMAP 1", y = "UMAP 2",
+         colour = if (variable == "step") "log1p(step)" else "Value") +
     theme_bw() +
-    theme(panel.grid.minor = element_blank())
-})
+    theme(panel.grid.minor = element_blank()))
 
 patchwork::wrap_plots(plots, ncol = 3)
 ```
+
+```{r, fig.width=9, fig.height=9}
+selected_users <- umap_scores |>
+  mutate(region = if_else(UMAP2 < -9, "Lower island", "Other")) %>%
+  filter(region == "Lower island") |>
+  count(userId, sort = TRUE) |>
+  slice_head(n = 20) |>
+  pull(userId)
+
+trigger_hourly_wide_tans |>
+  filter(userId %in% selected_users) |>
+  select(userId, hour_ts, bodytemp, skintemp) |>
+  pivot_longer(
+    c(bodytemp, skintemp),
+    names_to = "variable", values_to = "temperature") |>
+  filter(!is.na(temperature)) %>%
+  ggplot(aes(hour_ts, temperature, colour = variable)) +
+  geom_point(size = 0.4, alpha = 0.5) +
+  facet_wrap(~ userId, ncol = 3, scales = "free_x") +
+  scale_colour_manual(values = c(
+    bodytemp = "#0072B2", skintemp = "#D55E00"
+  )) +
+  labs(x = NULL, y = "Temperature (°C)", colour = NULL) +
+  theme_bw() +
+  theme(legend.position = "top", panel.grid.minor = element_blank())
+```
+
+## Environmental PCA
+
+```{r}
+env_complete <- trigger_hourly_wide_tans |>
+  select(userId, hour_ts, all_of(env_vars)) |>
+  filter(if_all(all_of(env_vars), is.finite))
+
+env_pca <- env_complete |>
+  select(all_of(env_vars)) |>
+  prcomp(center = TRUE, scale. = TRUE)
+
+env_variance <- tibble(
+  component = factor(paste0("PC", seq_along(env_pca$sdev))),
+  variance = env_pca$sdev^2 / sum(env_pca$sdev^2)
+) |> mutate(cumulative = cumsum(variance))
+```
+
+### Explained variance
+
+```{r}
+#| fig-width: 6
+#| fig-height: 3
+
+ggplot(env_variance, aes(component, variance)) +
+  geom_col(fill = "#0072B2") +
+  geom_line(aes(y = cumulative, group = 1), colour = "#D55E00") +
+  geom_point(aes(y = cumulative), colour = "#D55E00", size = 2) +
+  scale_y_continuous(labels = scales::label_percent(), limits = c(0, 1)) +
+  labs(x = NULL, y = "Explained variance") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
+### Loadings
+
+```{r}
+env_loadings <- env_pca$rotation[, 1:3] |>
+  as_tibble(rownames = "variable") |>
+  pivot_longer(-variable, names_to = "component", values_to = "loading") |>
+  mutate(variable = factor(variable, levels = rev(env_vars)))
+```
+
+```{r}
+#| fig-width: 6
+#| fig-height: 3
+
+ggplot(env_loadings, aes(loading, variable, fill = component)) +
+  geom_col(show.legend = FALSE) +
+  geom_vline(xintercept = 0, colour = "grey40") +
+  facet_wrap(~ component, nrow = 1) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = "Loading", y = NULL) +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank())
+```
+
+```{r}
+env_scores <- env_complete |>
+  select(userId, hour_ts) |>
+  bind_cols(as_tibble(env_pca$x[, 1:2]))
+```
+
+```{r}
+#| fig-width: 8
+#| fig-height: 6
+
+ggplot(env_scores, aes(PC1, PC2)) +
+  geom_bin_2d(bins = 100) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  coord_equal() +
+  labs(x = "PC1", y = "PC2", fill = "Observations") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
+```{r}
+set.seed(42)
+env_umap_data <- env_complete |> slice_sample(n = min(50000, nrow(env_complete)))
+env_umap_input <- env_umap_data |> select(all_of(env_vars)) |> scale()
+
+set.seed(42)
+env_umap <- uwot::umap(env_umap_input, n_neighbors = 30, min_dist = 0.2,
+                       metric = "euclidean", n_threads = 4, n_sgd_threads = 1)
+
+env_umap_scores <- env_umap_data |>
+  mutate(UMAP1 = env_umap[, 1], UMAP2 = env_umap[, 2])
+```
+
+```{r}
+#| fig-width: 8
+#| fig-height: 6
+
+ggplot(env_umap_scores, aes(UMAP1, UMAP2)) +
+  geom_bin_2d(bins = 100) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  coord_equal() +
+  labs(x = "UMAP 1", y = "UMAP 2", fill = "Observations") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
+```{r}
+#| fig-width: 16
+#| fig-height: 12
+
+plots <- map(env_vars, \(variable)
+  ggplot(env_umap_scores, aes(UMAP1, UMAP2, colour = .data[[variable]])) +
+    geom_point(size = 0.25, alpha = 0.5) +
+    scale_colour_gradientn(colours = rev(RColorBrewer::brewer.pal(11, "Spectral"))) +
+    coord_equal() +
+    labs(title = variable, x = "UMAP 1", y = "UMAP 2", colour = "Value") +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank()))
+
+patchwork::wrap_plots(plots, ncol = 3)
+```
+
+```{r}
+#| fig-width: 8
+#| fig-height: 6
+
+left_join(env_umap_scores, accounts, by = "userId") %>% 
+  ggplot(aes(UMAP1, UMAP2, color = nationality)) +
+  geom_point(size = .1) +
+  coord_equal() +
+  labs(x = "UMAP 1", y = "UMAP 2") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
 

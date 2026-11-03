@@ -1,0 +1,164 @@
+---
+title: "preliminary-results"
+editor: visual
+---
+
+```{r}
+#| include: false
+
+knitr::opts_knit$set(
+  root.dir = "/home/PERSONALE/alessandro.fuschi2/TRIGGER/trigger-analyses")
+```
+
+```{r}
+#| message: false
+library(tidyverse)
+
+triggerR <- new.env()
+walk(c("R/read_data.R", "R/remove_future_observations.R", "R/transform_means.R"), ~ source(.x, local = triggerR))
+
+if (!exists("trigger_hourly")) {
+  trigger_hourly <- triggerR$read_hourly(
+    tables = c("myair", "smartwatchhigh", "smartwatchlow"),
+    format = "wide", only_mean = TRUE, min_5min = 6
+  ) |> triggerR$drop_future() |> triggerR$transform_means() %>%
+    pluck("data")
+}
+
+env_hourly <- trigger_hourly |>
+  select(userId, hour_ts, temperature, humidity) |>
+  filter(if_all(c(temperature, humidity), is.finite)) |>
+  mutate(humidex = ThermIndex::humidex(temp = temperature, ur = humidity)) |>
+  filter(is.finite(humidex))
+```
+
+## Hourly heart rate and Humidex
+
+Hourly heart rate is analyzed in observations with no recorded steps (`step == 0`). Heart rate is centered within each participant using the mean of their retained observations. The orange curve shows participant-balanced means within 1-unit Humidex bins (at least 10 participants per bin).
+
+```{r}
+hr_hourly <- trigger_hourly |>
+  select(userId, hour_ts, heartrate, step) |>
+  inner_join(env_hourly |> select(userId, hour_ts, humidex),
+             by = c("userId", "hour_ts"), relationship = "one-to-one") |>
+  filter(step == 0, is.finite(heartrate)) |>
+  group_by(userId) |> mutate(heartrate_c = heartrate - mean(heartrate)) |> ungroup()
+
+hr_bins <- hr_hourly |>
+  mutate(humidex_bin = round(humidex)) |>
+  group_by(userId, humidex_bin) |> summarise(value = mean(heartrate_c), .groups = "drop") |>
+  group_by(humidex_bin) |>
+  summarise(mean_centered = mean(value), participants = n(), .groups = "drop") |>
+  filter(participants >= 10)
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 5
+
+ggplot(hr_hourly, aes(humidex, heartrate_c)) +
+  geom_bin_2d(bins = 80) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_line(data = hr_bins, aes(humidex_bin, mean_centered),
+            inherit.aes = FALSE, colour = "#D55E00", linewidth = 1) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  labs(x = "Humidex", y = "Centered heart rate (bpm)", fill = "Observations") +
+  theme_bw() + theme(panel.grid.minor = element_blank())
+```
+
+*Hourly heart rate deviations from participant-specific means across Humidex values during hours without recorded steps. The orange line represents participant-balanced bin averages.*
+
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+
+ggplot(hr_bins, aes(humidex_bin, mean_centered)) +
+  geom_col(fill = "#0072B2", width = 0.9) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 12)) +
+  labs(x = "Humidex", y = "Centered heart rate (bpm)") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
+
+## Daily Humidex and sleep measurements
+
+Daily Humidex is calculated as the mean of hourly Humidex values for participant-days with at least 12 valid hours. All seven sleep measurements are inspected before exploring their association with Humidex. Sleep duration and sleep-stage measures appear to be expressed in minutes, whereas sleep quality is an ordinal score; the interpretation of `insomnia` still requires confirmation.
+
+```{r}
+sleep_vars <- c("sleepduration", "awake", "insomnia", "remsleep",
+                "lightsleep", "deepsleep", "sleepquality")
+
+sleep_daily <- triggerR$.read_trigger_csv("sleep_tidy", columns = c("userId", "date", sleep_vars)) |>
+  triggerR$drop_future()
+
+sleep_summary <- sleep_daily |>
+  pivot_longer(all_of(sleep_vars), names_to = "variable", values_to = "value") |>
+  group_by(variable) |>
+  summarise(n_valid = sum(is.finite(value)), n_missing = sum(!is.finite(value)),
+            median = median(value, na.rm = TRUE), p05 = quantile(value, 0.05, na.rm = TRUE),
+            p95 = quantile(value, 0.95, na.rm = TRUE),
+            zero_pct = 100 * mean(value == 0, na.rm = TRUE), .groups = "drop")
+
+sleep_summary
+```
+
+The table summarizes the distribution and missingness of each sleep measurement, including the prevalence of zero values. We also examine whether total sleep duration matches the sum of the recorded sleep stages and wake time.
+
+```{r}
+sleep_daily |>
+  filter(if_all(c(sleepduration, awake, remsleep, lightsleep, deepsleep), is.finite)) |>
+  summarise(n = n(),
+            matching_pct = 100 * mean(abs(sleepduration - awake - remsleep -
+                                            lightsleep - deepsleep) <= 1),
+            min_duration = min(sleepduration), max_duration = max(sleepduration))
+```
+
+### Sleep measurements across Humidex
+
+For each sleep measurement, values are centered within participants (at least five matched days per participant-variable). Each Humidex-bin mean gives equal weight to each participant, and only bins with at least five participants are plotted.
+
+```{r}
+env_daily <- env_hourly |>
+  mutate(date = as.Date(hour_ts, tz = "UTC")) |>
+  group_by(userId, date) |>
+  summarise(humidex = mean(humidex), n_hours = n(), .groups = "drop") |>
+  filter(n_hours >= 12)
+
+sleep_humidex <- sleep_daily |>
+  inner_join(env_daily, by = c("userId", "date"), relationship = "one-to-one") |>
+  pivot_longer(all_of(sleep_vars), names_to = "variable", values_to = "value") |>
+  filter(is.finite(value)) |>
+  group_by(userId, variable) |>
+  filter(n() >= 5) |>
+  mutate(value_centered = value - mean(value)) |>
+  ungroup()
+
+sleep_bins <- sleep_humidex |>
+  mutate(humidex_bin = round(humidex)) |>
+  group_by(userId, variable, humidex_bin) |>
+  summarise(value = mean(value_centered), .groups = "drop") |>
+  group_by(variable, humidex_bin) |>
+  summarise(mean_centered = mean(value), participants = n(), .groups = "drop") |>
+  filter(participants >= 5)
+```
+
+```{r}
+#| fig-width: 13
+#| fig-height: 9
+
+ggplot(sleep_bins, aes(humidex_bin, mean_centered, fill = variable)) +
+  geom_col(width = 0.9, show.legend = FALSE) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  facet_wrap(~ variable, scales = "free_y", ncol = 3) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = "Daily mean Humidex", y = "Participant-centered deviation (native units)") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
+```
+
+*Participant-centered sleep measurements across daily Humidex intervals. Bars show participant-balanced means; durations are in minutes, while sleep quality is a score and the units of insomnia remain to be verified.*
+
+**Temporal alignment:** Sleep and environmental records are matched on the same UTC calendar date. Verify whether `sleep_tidy$date` denotes sleep onset or wake-up date before interpreting Humidex as preceding the night's sleep. Stage durations are interdependent, sleep quality is ordinal, and these plots are exploratory associations rather than causal estimates. `step == 0` in the hourly analysis means no recorded steps, not necessarily rest.
