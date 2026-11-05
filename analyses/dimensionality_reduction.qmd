@@ -1,6 +1,6 @@
 ---
 title: "dimensionality_reduction"
-editor: visual
+editor: source
 ---
 
 ```{r}
@@ -16,7 +16,8 @@ knitr::opts_knit$set(
 library(tidyverse)
 
 triggerR <- new.env()
-walk(c("R/read_data.R", "R/remove_future_observations.R", "R/transform_means.R"),
+walk(c("R/read_data.R", "R/remove_future_observations.R",
+       "R/transform_means.R", "R/fix_temperature.R"),
      ~ source(.x, local = triggerR))
 
 accounts <- triggerR$read_trigger_accounts() %>%
@@ -79,7 +80,6 @@ coverage |>
   theme(panel.grid.major.y = element_blank(),
         panel.grid.minor = element_blank())
 ```
-
 
 ```{r}
 #| fig-width: 8
@@ -201,7 +201,6 @@ phy_scores <- phy_complete |>
   bind_cols(as_tibble(phy_pca$x[, 1:2]))
 ```
 
-
 ```{r}
 ggplot(phy_scores, aes(PC1, PC2)) +
   geom_bin_2d(bins = 100) +
@@ -276,7 +275,7 @@ patchwork::wrap_plots(plots, ncol = 3)
 
 ```{r, fig.width=9, fig.height=9}
 selected_users <- umap_scores |>
-  mutate(region = if_else(UMAP2 < -9, "Lower island", "Other")) %>%
+  mutate(region = if_else(UMAP2 > -7, "Lower island", "Other")) %>%
   filter(region == "Lower island") |>
   count(userId, sort = TRUE) |>
   slice_head(n = 20) |>
@@ -377,6 +376,11 @@ ggplot(env_scores, aes(PC1, PC2)) +
 
 ```{r}
 set.seed(42)
+
+robust_scale <- function(x) {
+  (x - median(x, na.rm = TRUE)) / IQR(x, na.rm = TRUE)
+}
+
 env_umap_data <- env_complete |> slice_sample(n = min(50000, nrow(env_complete)))
 env_umap_input <- env_umap_data |> select(all_of(env_vars)) |> scale()
 
@@ -429,5 +433,3 @@ left_join(env_umap_scores, accounts, by = "userId") %>%
   theme_bw() +
   theme(panel.grid.minor = element_blank())
 ```
-
-

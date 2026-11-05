@@ -1,6 +1,6 @@
 ---
 title: "preliminary-results"
-editor: visual
+editor: source
 ---
 
 ```{r}
@@ -68,7 +68,6 @@ ggplot(hr_hourly, aes(humidex, heartrate_c)) +
 
 *Hourly heart rate deviations from participant-specific means across Humidex values during hours without recorded steps. The orange line represents participant-balanced bin averages.*
 
-
 ```{r}
 #| fig-width: 10
 #| fig-height: 5
@@ -81,7 +80,6 @@ ggplot(hr_bins, aes(humidex_bin, mean_centered)) +
   theme_bw() +
   theme(panel.grid.minor = element_blank())
 ```
-
 
 ## Daily Humidex and sleep measurements
 
