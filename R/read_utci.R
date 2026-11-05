@@ -20,7 +20,7 @@ read_utci_hourly <- function(data_dir = "data", cities = c("Augsburg", "Bologna"
       latitude = readr::col_double(), longitude = readr::col_double()), locale = readr::locale(tz = "UTC"),
       show_col_types = FALSE, progress = FALSE)
     readr::stop_for_problems(x)
-    dplyr::transmute(x, city = city, hour_ts = valid_time, utci, latitude, longitude)
+    dplyr::transmute(x, city = city, hour_ts = valid_time, utci - 273.15, latitude, longitude)
   }) |>
     dplyr::bind_rows() |>
     dplyr::arrange(city, hour_ts)
