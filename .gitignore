@@ -6,6 +6,7 @@
 data/*
 !data/README.md
 !data/download_data.py
+!data/shared
 
 # Local Python environment
 .venv/

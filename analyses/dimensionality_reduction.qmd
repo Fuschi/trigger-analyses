@@ -17,7 +17,7 @@ library(tidyverse)
 
 triggerR <- new.env()
 walk(c("R/read_data.R", "R/remove_future_observations.R",
-       "R/transform_means.R", "R/fix_temperature.R"),
+       "R/transform_means.R"),
      ~ source(.x, local = triggerR))
 
 accounts <- triggerR$read_trigger_accounts() %>%
