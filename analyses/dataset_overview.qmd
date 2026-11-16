@@ -10,23 +10,21 @@ format:
 library(tidyverse)
 
 triggerR <- new.env()
-walk(c("R/read_data.R", "R/remove_future_observations.R"), ~source(.x, local = triggerR))
+walk(c("R/read_data.R", "R/remove_future_observations.R", "R/read_participant_metadata.R"), ~source(.x, local = triggerR))
 
-if(!exists("trigger_5min")) trigger_5min <- triggerR$drop_future(triggerR$read_5min(format = "long",
-                                                                                    only_mean = FALSE))
+if(!exists("trigger_tidy_long")) trigger_tidy_long <- triggerR$drop_future(triggerR$read_5min(format = "long"))
 
-accounts <- triggerR$read_trigger_accounts(columns = c("userId", "nationality"))
+accounts <- triggerR$read_participant_metadata()
 ```
 
 ## Total volume
 
 ```{r}
-trigger_5min |>
+trigger_tidy_long |>
   summarise(
-    aggregates_n = n(),
-    measurements_n = sum(n, na.rm = TRUE),
+    measurements_n = sum(n(), na.rm = TRUE),
     participants_n = n_distinct(userId),
-    memory_size = format(object.size(trigger_5min), units = "auto"))
+    memory_size = format(object.size(trigger_tidy_long), units = "auto"))
 ```
 
 ## Data sources
@@ -34,14 +32,13 @@ trigger_5min |>
 Counts refer to valid minute-level measurements represented in five-minute aggregates.
 
 ```{r}
-source_summary <- trigger_5min |>
+source_summary <- trigger_tidy_long |>
   group_by(source) |>
   summarise(
-    measurements_n = sum(n, na.rm = TRUE),
+    measurements_n = n(),
     participants_n = n_distinct(userId),
     variables_n = n_distinct(variable),
-    .groups = "drop"
-  )
+    .groups = "drop")
 
 source_summary
 ```
@@ -60,9 +57,9 @@ ggplot(source_summary, aes(reorder(source, measurements_n), measurements_n, fill
 ## Measurements
 
 ```{r}
-measurement_summary <- trigger_5min |>
+measurement_summary <- trigger_tidy_long |>
   group_by(source, variable) |>
-  summarise(measurements_n = sum(n, na.rm = TRUE), .groups = "drop") |>
+  summarise(measurements_n = n(), .groups = "drop") |>
   arrange(source, desc(measurements_n)) |>
   mutate(variable = factor(variable, levels = rev(variable)))
 ```
@@ -87,30 +84,24 @@ ggplot(measurement_summary, aes(variable, measurements_n, fill = source)) +
   theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank())
 ```
 
-## Sampling density
-
-Distribution of valid minutes within observed five-minute buckets. Empty buckets are excluded.
+## Sampling frequency
 
 ```{r}
-sampling_frequency <- trigger_5min |>
-  count(source, variable, minutes_n = n, name = "buckets_n") |>
-  group_by(source, variable) |>
-  mutate(percentage = buckets_n / sum(buckets_n)) |>
-  ungroup()
+sampling_5min <- trigger_tidy_long |>
+  filter(source %in% c("myair", "smartwatchlow", "smartwatchhigh")) |>
+  slice_sample(prop = 100000) |>
+  count(source, variable, userId, bucket_5min, name = "measurements_n")
 ```
 
-```{r, fig.width=7, fig.height=5}
-ggplot(sampling_frequency, aes(variable, percentage, fill = factor(minutes_n, levels = 1:5))) +
-  geom_col() +
-  coord_flip() +
-  facet_grid(source ~ ., scales = "free_y", space = "free_y") +
-  scale_fill_brewer(palette = "Set1", drop = FALSE) +
-  scale_y_continuous(labels = scales::label_percent()) +
-  labs(x = NULL, y = "Observed buckets (%)", fill = "Observed measurements\nwithin 5-min bucket") +
-  theme_bw() +
-  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank()) +
-  theme(legend.position = "bottom")
+```{r}
+ggplot(sampling_5min, aes(measurements_n)) +
+  geom_bar(fill = "steelblue") +
+  facet_wrap(~variable, scales = "free") +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(x = "# Measurements per 5-minute interval", y = "# Intervals") +
+  theme_bw()
 ```
+
 
 ## Daily participants
 
@@ -180,7 +171,6 @@ ggplot(cumulative_measurements, aes(date, cumulative_n, colour = source)) +
 ```
 
 ## Sampling continuity
-
 
 ```{r}
 participant_info <- trigger_5min |>
