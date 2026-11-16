@@ -1,0 +1,269 @@
+
+---
+title: "TRIGGER - GPS exploration"
+format:
+  html:
+    toc: true
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+editor: source
+---
+
+## GPS data
+
+Load GPS observations and retain coordinates with valid geographic ranges and reported accuracy between 1 and 200 m.
+
+```{r}
+library(tidyverse)
+
+triggerR <- new.env()
+walk(list.files("R", full.names = T), ~ source(.x, local = triggerR))
+
+gps <- triggerR$.read_trigger_csv("gps_tidy") |>
+  select(userId, minute_ts, latitude, longitude, accuracy) |>
+  mutate(date = as.Date(minute_ts, tz = "UTC")) |>
+  filter(between(accuracy, 1, 200),
+         between(latitude, -90, 90),
+         between(longitude, -180, 180)) |>
+  mutate(date = as.Date(minute_ts, tz = "UTC"))
+```
+
+## Geographic grid
+
+### Relationship with Copernicus ERA5-HEAT
+
+Copernicus [ERA5-HEAT](https://cds.climate.copernicus.eu/datasets/derived-utci-historical) provides hourly Universal Thermal Climate Index (UTCI) estimates on a regular latitude-longitude grid with a spacing of **0.25° × 0.25°**.
+
+This spacing represents angular differences between adjacent grid points. A 0.25° interval corresponds to approximately 27.8 km north–south ($40,000/360 \times 0.25 \approx 27.8$ km). East–west distances decrease with latitude as meridians converge toward the poles, reaching approximately 19.8 km at Bologna's latitude ($27.8 \times \cos(44.5^\circ) \approx 19.8$ km).
+
+To associate GPS observations with this geographic grid, each coordinate is rounded to the nearest multiple of 0.25°:
+
+$$
+\phi_{\mathrm{grid}} = \frac{\operatorname{round}(4\phi)}{4}
+$$
+
+$$
+\lambda_{\mathrm{grid}} = \frac{\operatorname{round}(4\lambda)}{4}
+$$
+
+where $\phi$ and $\lambda$ represent the original GPS latitude and longitude, respectively.
+
+
+This assigns each observation to a regular grid point based on geographic coordinates. It is equivalent to selecting the nearest grid point independently along each coordinate axis, rather than calculating the minimum geodesic distance.
+
+The method assumes that the Copernicus data use the corresponding 0.25° grid alignment.
+
+For visualization, each grid point is represented by a rectangular polygon extending ±0.125° in both latitude and longitude. These polygons are constructed geometrically and should not be interpreted as spatially uniform UTCI measurements.
+
+```{r}
+gps <- gps |>
+  mutate(lat = round(latitude * 4) / 4,
+         lon = round(longitude * 4) / 4)
+```
+
+## Grid coverage
+
+Summarise GPS availability at each geographic grid point.
+
+Three complementary indicators are calculated:
+
+- `n_gps`: total number of GPS observations.
+- `n_users`: number of distinct participants observed at the grid point.
+- `n_user_days`: number of distinct participant-days represented at the grid point.
+
+The number of GPS observations reflects sampling intensity, whereas participant and participant-day counts provide complementary measures of geographic coverage.
+
+```{r}
+gps_cells <- gps |>
+  group_by(lat, lon) |>
+  summarise(
+    n_gps = n(),
+    n_users = n_distinct(userId),
+    n_user_days = n_distinct(userId, date),
+    .groups = "drop")
+```
+
+## 3D geographic visualization
+
+### Polygon construction
+
+Each grid point `(lon, lat)` is converted into a rectangular polygon with the following vertices:
+
+| Vertex | Longitude | Latitude |
+|---|---|---|
+| Southwest | lon − 0.125 | lat − 0.125 |
+| Southeast | lon + 0.125 | lat − 0.125 |
+| Northeast | lon + 0.125 | lat + 0.125 |
+| Northwest | lon − 0.125 | lat + 0.125 |
+
+The first vertex is repeated to close the polygon.
+
+Polygons are stored as `sf` geometries using the geographic coordinate reference system EPSG:4326.
+
+### Extrusion height and color
+
+The height of each 3D column is proportional to the square root of its relative GPS observation count:
+
+\[
+h = 200 + 500000\sqrt{\frac{n_{\mathrm{gps}}}{\max(n_{\mathrm{gps}})}}
+\]
+
+The square-root transformation reduces the visual dominance of highly sampled grid points.
+
+Colors represent observation-count categories. Both height and color are visualization attributes and do not represent physical altitude or meteorological measurements.
+
+```{r}
+gps_cells <- gps_cells |>
+  mutate(
+    height = 200 + 500000 * sqrt(n_gps / max(n_gps)),
+    color = case_when(
+      n_gps < 10 ~ "#93C5FD",
+      n_gps < 100 ~ "#2563EB",
+      n_gps < 1000 ~ "#FACC15",
+      n_gps < 10000 ~ "#F97316",
+      TRUE ~ "#B91C1C"),
+    info = paste0(
+      "<b>GPS observations:</b> ", n_gps,
+      "<br><b>Participants:</b> ", n_users,
+      "<br><b>Participant-days:</b> ", n_user_days))
+
+polygons <- purrr::map2(gps_cells$lon, gps_cells$lat, \(x, y)
+  sf::st_polygon(list(matrix(c(
+    x - .125, y - .125,
+    x + .125, y - .125,
+    x + .125, y + .125,
+    x - .125, y + .125,
+    x - .125, y - .125
+  ), ncol = 2, byrow = TRUE))))
+
+gps_cells$geometry <- sf::st_sfc(polygons, crs = 4326)
+gps_cells <- sf::st_as_sf(gps_cells)
+```
+
+### Interactive map
+
+The geographic polygons are rendered as 3D extrusions using `mapgl`.
+
+The map allows exploration of GPS sampling intensity, participant coverage and participant-day coverage across geographic grid points.
+
+```{r}
+mapgl::maplibre(
+  style = mapgl::carto_style("positron"),
+  center = c(11, 45), zoom = 4, pitch = 60,
+  projection = "mercator") |>
+  mapgl::add_fill_extrusion_layer(
+    id = "gps-density",
+    source = gps_cells,
+    fill_extrusion_height = list("get", "height"),
+    fill_extrusion_color = list("get", "color"),
+    fill_extrusion_opacity = 0.9,
+    tooltip = "info") |>
+  mapgl::add_navigation_control(position = "top-right", visualize_pitch = TRUE) |>
+  mapgl::add_fullscreen_control(position = "top-right")
+```
+
+
+## GPS coverage
+
+Daily GPS availability is summarised by the number of observations and distinct hours recorded for each participant-day.
+
+```{r}
+gps_days <- gps |>
+  group_by(userId, date) |>
+  summarise(
+    gps_n = n(),
+    hours_n = n_distinct(lubridate::hour(minute_ts)),
+    .groups = "drop")
+
+gps_days |>
+  summarise(
+    participants_n = n_distinct(userId),
+    participant_days_n = n(),
+    median_gps_n = median(gps_n),
+    median_hours_n = median(hours_n),
+    single_gps_days_pct = 100 * mean(gps_n == 1),
+    single_hour_days_pct = 100 * mean(hours_n == 1))
+```
+
+### Daily observations
+
+Distribution of GPS observations per participant-day, including days with a single observation.
+
+```{r}
+ggplot(gps_days, aes(gps_n)) +
+  geom_histogram(bins = 50, fill = "steelblue") +
+  scale_x_log10() +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(x = "# GPS observations per participant-day", y = "# Participant-days") +
+  theme_bw()
+```
+
+### Temporal coverage
+
+Each tile represents a participant-day, coloured by the number of distinct hours with GPS observations. Participants are grouped by nationality.
+
+```{r}
+triggerR <- new.env()
+walk(list.files("R", full.names = T), ~source(.x, local = triggerR))
+
+metasample <- triggerR$read_participant_metadata()
+
+gps_plot <- gps_days |>
+  left_join(metasample |> distinct(userId, .keep_all = TRUE), by = "userId") |>
+  arrange(nationality, userId) |>
+  mutate(userId = factor(userId, levels = unique(userId)))
+
+country_tiles <- gps_plot |>
+  distinct(userId, nationality)
+
+ggplot(gps_plot, aes(y = userId)) +
+  geom_tile(data = country_tiles, aes(x = min(gps_plot$date) - 15, fill = nationality), width = 10) +
+  scale_fill_discrete(name = "Nationality") +
+  ggnewscale::new_scale_fill() +
+  geom_tile(aes(x = date, fill = hours_n)) +
+  scale_fill_viridis_c(name = "# GPS hours", limits = c(0, 24)) +
+  labs(x = "Date", y = "Participant") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+```
+
+## GPS sampling frequency
+
+Sampling intervals are calculated between consecutive observations for each participant, either across the entire monitoring period or within the same UTC calendar day.
+
+```{r}
+gps <- gps |>
+  arrange(userId, minute_ts) |>
+  group_by(userId) |>
+  mutate(gap_min = as.numeric(difftime(minute_ts, lag(minute_ts), units = "mins"))) |>
+  group_by(userId, date) |>
+  mutate(gap_day_min = as.numeric(difftime(minute_ts, lag(minute_ts), units = "mins"))) |>
+  ungroup()
+```
+
+### Sampling interval distribution
+
+Overall intervals include gaps across days or months, whereas within-day intervals exclude gaps between different calendar days.
+
+```{r}
+gps |>
+  select(gap_min, gap_day_min) |>
+  pivot_longer(everything(), names_to = "interval", values_to = "minutes") |>
+  filter(is.finite(minutes), minutes > 0) |>
+  mutate(interval = recode(interval,
+                          gap_min = "Overall",
+                          gap_day_min = "Within-day")) |>
+  ggplot(aes(minutes)) +
+  geom_histogram(bins = 60, fill = "steelblue") +
+  facet_wrap(~interval, scales = "free") +
+  scale_x_log10(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(x = "Time between consecutive GPS observations (minutes)", y = "# Intervals") +
+  theme_bw()
+```
+

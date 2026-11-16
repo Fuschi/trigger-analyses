@@ -1,0 +1,162 @@
+---
+title: "Bologna participant data export"
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+library(tidyverse)
+
+triggerR <- new.env()
+walk(list.files("R", full.names = TRUE, pattern = "\\.R$"), ~source(.x, local = triggerR))
+
+output_dir <- "data/exports/bologna"
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+## Geographic selection
+
+GPS observations are classified using the following bounding box around Bologna:
+
+| Boundary | Coordinate |
+|---|---:|
+| South | 44.40° N |
+| North | 44.60° N |
+| West | 11.20° E |
+| East | 11.50° E |
+
+The bounding box covers approximately 22 × 24 km and does not correspond to Bologna's administrative boundaries.
+
+UTCI data are obtained from [Copernicus ERA5-HEAT](https://cds.climate.copernicus.eu/datasets/derived-utci-historical), with a spatial resolution of 0.25° × 0.25° (approximately 28 × 20 km at Bologna's latitude).
+
+The GPS bounding box is independent of the Copernicus grid and may overlap multiple meteorological cells. Hourly UTCI values are assigned from the existing Bologna time series and represent outdoor meteorological conditions rather than personal thermal exposure.
+
+## GPS data
+
+Load hourly GPS observations and retain participant-days with at least one observed hourly location inside Bologna and no observed hourly locations outside the bounding box.
+
+```{r}
+gps <- triggerR$read_hourly("gps") |>
+  triggerR$drop_future() |>
+  mutate(userId = as.character(userId), date = as.Date(hour_ts, tz = "UTC"))
+
+bologna_days <- gps |>
+  filter(variable %in% c("latitude", "longitude")) |>
+  select(userId, date, hour_ts, variable, mean) |>
+  pivot_wider(names_from = variable, values_from = mean) |>
+  group_by(userId, date) |>
+  filter(all(between(latitude, 44.40, 44.60) &
+             between(longitude, 11.20, 11.50))) |>
+  ungroup() |>
+  distinct(userId, date)
+```
+
+## Selection summary
+
+```{r}
+bologna_days |>
+  summarise(
+    participants_n = n_distinct(userId),
+    participant_days_n = n())
+
+gps_bologna <- gps |>
+  semi_join(bologna_days, by = c("userId", "date"))
+
+gps_bologna |>
+  summarise(
+    gps_measurements_n = n(),
+    participants_n = n_distinct(userId),
+    hours_n = n_distinct(paste(userId, hour_ts)))
+```
+
+## UTCI hourly data
+
+Load hourly UTCI observations for Bologna.
+
+```{r}
+utci_bologna <- triggerR$read_utci_hourly() |>
+  filter(city == "Bologna") |>
+  select(hour_ts, utci, utci_latitude, utci_longitude)
+
+stopifnot(nrow(utci_bologna) > 0, !anyDuplicated(utci_bologna$hour_ts))
+```
+
+```{r}
+utci_bologna |>
+  summarise(
+    hours_n = n(),
+    first_hour = min(hour_ts),
+    last_hour = max(hour_ts),
+    missing_n = sum(is.na(utci)),
+    latitude = first(utci_latitude),
+    longitude = first(utci_longitude))
+```
+
+## TRIGGER hourly data
+
+Extract all available hourly TRIGGER measurements for selected participant-days, including hours without GPS observations.
+
+```{r}
+trigger_bologna <- triggerR$read_hourly(format = "long", only_mean = FALSE) |>
+  triggerR$drop_future() |>
+  mutate(date = as.Date(hour_ts, tz = "UTC")) |>
+  semi_join(bologna_days, by = c("userId", "date")) |>
+  left_join(utci_bologna, by = "hour_ts")
+```
+
+```{r}
+trigger_bologna |>
+  group_by(source) |>
+  summarise(
+    measurements_n = n(),
+    participants_n = n_distinct(userId),
+    hours_n = n_distinct(paste(userId, hour_ts)),
+    utci_available_pct = 100 * mean(!is.na(utci)),
+    .groups = "drop")
+```
+
+## GPS hourly data
+
+Associate hourly UTCI values with GPS observations from selected participant-days.
+
+```{r}
+gps_bologna <- gps_bologna |>
+  left_join(utci_bologna, by = "hour_ts")
+```
+
+## Data export
+
+```{r}
+write_csv(bologna_days, file.path(output_dir, "participant_days.csv.gz"))
+write_csv(gps_bologna, file.path(output_dir, "gps_hourly.csv.gz"))
+write_csv(trigger_bologna, file.path(output_dir, "measurements_hourly.csv.gz"))
+write_csv(utci_bologna, file.path(output_dir, "utci_hourly.csv.gz"))
+```
+
+## Export summary
+
+```{r}
+tibble(
+  dataset = c("Participant-days", "GPS hourly", "TRIGGER hourly", "UTCI hourly"),
+  rows = c(nrow(bologna_days), nrow(gps_bologna), nrow(trigger_bologna), nrow(utci_bologna)),
+  participants = c(n_distinct(bologna_days$userId),
+                   n_distinct(gps_bologna$userId),
+                   n_distinct(trigger_bologna$userId), NA_integer_))
+```
+
+## Limitations
+
+- Participant-days are selected from available hourly GPS observations; unobserved movements cannot be excluded.
+- Selection uses hourly mean coordinates, which may conceal movements within individual hours.
+- Days with missing latitude or longitude values are excluded from the selection.
+- No minimum number of GPS observations or hours per day is required.
+- All available hourly TRIGGER measurements are retained for selected days, including hours without GPS.
+- UTCI represents outdoor meteorological conditions rather than measured personal thermal exposure.
+- GPS, TRIGGER and UTCI are matched using UTC timestamps.
+- Sleep data are not included in this export.
+- GPS coordinates and participant identifiers require appropriate safeguards before sharing.
