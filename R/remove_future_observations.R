@@ -1,5 +1,6 @@
 # Remove intervals containing archived future participant-minute observations.
 # Supports tidy, five-minute, hourly and daily data, in wide or long format.
+# When multiple time columns exist, the finest resolution takes precedence.
 # Aggregated intervals are removed entirely; statistics are not recalculated.
 # Exclusions apply to every source and variable for the matching participant.
 # Archived dates are not reassessed against today's date.
@@ -11,8 +12,8 @@
 
 drop_future <- function(data, path = "data/future_observations.csv.gz") {
   keys <- intersect(c("minute_ts", "bucket_5min", "hour_ts", "date"), names(data))
-  if (!"userId" %in% names(data) || length(keys) != 1L)
-    stop("Expected userId and one of: minute_ts, bucket_5min, hour_ts, date.", call. = FALSE)
+  if (!"userId" %in% names(data) || length(keys) == 0L)
+    stop("Expected userId and at least one of: minute_ts, bucket_5min, hour_ts, date.", call. = FALSE)
   key <- keys[[1]]
   
   excluded <- readr::read_csv(
