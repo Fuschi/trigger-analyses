@@ -53,6 +53,7 @@ read_gps_tidy <- function(accuracy_min = 1, accuracy_max = 200) {
                   dplyr::between(latitude, -90, 90),
                   dplyr::between(longitude, -180, 180)) |>
     dplyr::mutate(
+      userId = as.character(userId),
       date = as.Date(minute_ts, tz = "UTC"),
       grid_latitude = round(latitude * 4) / 4,
       grid_longitude = round(longitude * 4) / 4)
