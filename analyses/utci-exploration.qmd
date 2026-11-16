@@ -1,0 +1,93 @@
+---
+title: "utci exploration"
+editor: source
+---
+
+```{r}
+#| include: false
+
+knitr::opts_knit$set(
+  root.dir = "/home/PERSONALE/alessandro.fuschi2/TRIGGER/trigger-analyses")
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+
+triggerR <- new.env()
+walk(list.files("R", full.names = T), ~ source(.x, local = triggerR))
+```
+
+```{r}
+utci_daily <- triggerR$read_utci_daily()
+utci_hourly <- triggerR$read_hourly()
+trigger_hourly <- triggerR$read_hourly()
+```
+
+```{r}
+#| fig-width: 13
+#| fig-height: 8
+
+stress_bands <- tibble(
+  stress = c("Extreme cold", "Very strong cold", "Strong cold", "Moderate cold", "Slight cold",
+             "No thermal stress", "Moderate heat", "Strong heat", "Very strong heat", "Extreme heat"),
+  ymin = c(-Inf, -40, -27, -13, 0, 9, 26, 32, 38, 46),
+  ymax = c(-40, -27, -13, 0, 9, 26, 32, 38, 46, Inf)
+) %>%
+  mutate(xmin = min(utci_daily$date), xmax = max(utci_daily$date))
+
+stress_colors <- c(
+  "Extreme cold" = "#1E3A8A", "Very strong cold" = "#2563EB",
+  "Strong cold" = "#60A5FA", "Moderate cold" = "#93C5FD",
+  "Slight cold" = "#DBEAFE", "No thermal stress" = "#D1D5DB",
+  "Moderate heat" = "#FDBA74", "Strong heat" = "#FB923C",
+  "Very strong heat" = "#EA580C", "Extreme heat" = "#B91C1C"
+)
+
+ggplot(utci_daily, aes(x = date)) +
+  geom_rect(data = stress_bands, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = stress),
+          inherit.aes = FALSE, alpha = 0.25) +
+  geom_ribbon(aes(ymin = utci_min, ymax = utci_max), fill = "#A6CEE3", alpha = 0.4) +
+  geom_line(aes(y = utci_mean), color = "#1F78B4", linewidth = 0.5) +
+  facet_wrap(~ city, ncol = 2) +
+  scale_fill_manual(values = stress_colors, name = "Thermal stress") +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b %Y") +
+  scale_y_continuous(breaks = c(-27, -13, 0, 9, 26, 32, 38, 46)) +
+  coord_cartesian(ylim = c(-30, 48)) +
+  labs(x = NULL, y = "UTCI (°C)", title = "Daily UTCI trends across study cities",
+       subtitle = "Daily mean (line), minimum–maximum range (shaded area) and thermal stress classes (background)") +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, override.aes = list(alpha = 0.7))) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom", legend.text = element_text(size = 8),
+        panel.grid.minor = element_blank())
+```
+
+```{r}
+#| label: fig-utci-stress-distribution
+#| fig-width: 12
+#| fig-height: 8
+
+utci_stress <- triggerR$read_utci_hourly() %>%
+  mutate(stress = cut(utci, breaks = c(-Inf, -40, -27, -13, 0, 9, 26, 32, 38, 46, Inf),
+                      labels = stress_bands$stress, right = FALSE))
+
+stress_counts <- utci_stress %>%
+  count(city, stress, .drop = FALSE) %>%
+  group_by(city) %>%
+  mutate(percentage = 100 * n / sum(n)) %>%
+  ungroup()
+
+ggplot(stress_counts, aes(x = stress, y = n, fill = stress)) +
+  geom_col(width = 0.8) +
+  facet_wrap(~ city, ncol = 2) +
+  coord_flip() +
+  scale_fill_manual(values = stress_colors, guide = "none") +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(x = NULL, y = "Number of hours", title = "Thermal stress distribution across study cities") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank())
+```
+
+
+
+
