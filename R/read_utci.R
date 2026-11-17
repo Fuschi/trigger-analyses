@@ -1,44 +1,46 @@
 # ---------------------------------------------------------------------------
-# UTCI data
+# UTCI data reading and aggregation
+# ---------------------------------------------------------------------------
+# Read all hourly UTCI CSV files from data/shared/utci, including original
+# city-named files and new grid-point files. Coordinates identify Copernicus
+# grid points; timestamps are UTC and UTCI is converted from Kelvin to Celsius.
+# Duplicate grid point/hour records are removed, preferring coordinate-named
+# files when both sources contain the same observation.
 # ---------------------------------------------------------------------------
 
-# Read hourly UTCI data for the four TRIGGER study cities.
-# UTCI coordinates refer to the ERA5 grid points associated with each study city,
-# not to participant GPS locations. Timestamps are interpreted as UTC.
-# Convert original UTCI values from Kelvin to Celsius.
-#
-# Examples:
-#   utci_hourly <- read_utci_hourly()
-#   utci_bologna <- read_utci_hourly(cities = "Bologna")
-
-read_utci_hourly <- function(data_dir = "data", cities = c("Augsburg", "Bologna", "Geneva", "Heraklion")) {
-  paths <- file.path(data_dir, "shared", "utci", paste0("UTCI-", cities, ".csv"))
-  missing <- paths[!file.exists(paths)]
-  if (length(missing)) stop("Missing UTCI files: ", paste(missing, collapse = ", "), call. = FALSE)
+# Read hourly UTCI for all downloaded Copernicus grid points.
+read_utci_hourly <- function(data_dir = "data") {
+  dir <- file.path(data_dir, "shared", "utci")
+  paths <- list.files(dir, pattern = "^UTCI-.*\\.csv$", full.names = TRUE)
+  if (!length(paths)) stop("No UTCI CSV files found in: ", dir, call. = FALSE)
   
-  purrr::map2(paths, cities, \(path, city) {
-    x <- readr::read_csv(path, col_types = readr::cols(valid_time = readr::col_datetime(), utci = readr::col_double(),
-                                                       latitude = readr::col_double(), longitude = readr::col_double()), locale = readr::locale(tz = "UTC"),
-                         show_col_types = FALSE, progress = FALSE)
+  # Coordinate-named files have priority over legacy city-named files.
+  paths <- paths[order(grepl("^UTCI-[A-Za-z]", basename(paths)))]
+  
+  purrr::map(paths, \(path) {
+    x <- readr::read_csv(path,
+                         col_types = readr::cols(valid_time = readr::col_datetime(), utci = readr::col_double(),
+                                                 latitude = readr::col_double(), longitude = readr::col_double()),
+                         locale = readr::locale(tz = "UTC"), show_col_types = FALSE, progress = FALSE)
     readr::stop_for_problems(x)
-    dplyr::transmute(x, city = city, hour_ts = valid_time, utci = utci - 273.15,
-                     utci_latitude = latitude, utci_longitude = longitude)
+    dplyr::transmute(x, grid_latitude = latitude, grid_longitude = longitude,
+                     hour_ts = valid_time, utci = utci - 273.15)
   }) |>
     dplyr::bind_rows() |>
-    dplyr::arrange(city, hour_ts)
+    dplyr::distinct(grid_latitude, grid_longitude, hour_ts, .keep_all = TRUE) |>
+    dplyr::arrange(grid_latitude, grid_longitude, hour_ts)
 }
 
-# Aggregate hourly UTCI to calendar days (UTC), separately for each study city.
-# Site coordinates identify UTCI reference grid points, not participant GPS locations.
-#
-# Examples:
-#   utci_daily <- read_utci_daily()
-#   utci_bologna_daily <- read_utci_daily(cities = "Bologna")
-
-read_utci_daily <- function(data_dir = "data", cities = c("Augsburg", "Bologna", "Geneva", "Heraklion")) {
-  read_utci_hourly(data_dir = data_dir, cities = cities) |>
+# Aggregate UTCI by Copernicus grid point and UTC calendar day.
+read_utci_daily <- function(data_dir = "data") {
+  read_utci_hourly(data_dir) |>
     dplyr::mutate(date = as.Date(hour_ts, tz = "UTC")) |>
-    dplyr::group_by(city, date, utci_latitude, utci_longitude) |>
-    dplyr::summarise(utci_min = min(utci), utci_mean = mean(utci), utci_median = median(utci),
-                     utci_max = max(utci), .groups = "drop")
+    dplyr::group_by(grid_latitude, grid_longitude, date) |>
+    dplyr::summarise(
+      utci_hours_n = sum(!is.na(utci)),
+      utci_min = if (all(is.na(utci))) NA_real_ else min(utci, na.rm = TRUE),
+      utci_mean = if (all(is.na(utci))) NA_real_ else mean(utci, na.rm = TRUE),
+      utci_median = if (all(is.na(utci))) NA_real_ else median(utci, na.rm = TRUE),
+      utci_max = if (all(is.na(utci))) NA_real_ else max(utci, na.rm = TRUE),
+      .groups = "drop")
 }

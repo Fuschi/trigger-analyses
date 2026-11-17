@@ -1,0 +1,782 @@
+grid_latitude,grid_longitude,gps_n,users_n,user_days_n,city,country,city_distance_km,selected
+46.25,6.25,116804,44,2928,Ville-la-Grand,FR,5.2,True
+44.5,11.25,104675,55,2854,Zola Predosa,IT,2.8,True
+46.25,6.0,40010,31,1288,Saint-Genis-Pouilly,FR,1.8,True
+44.5,11.5,27570,34,1068,Castenaso,IT,2.9,True
+48.25,11.0,3288,15,364,Mering,DE,2.1,True
+35.25,25.25,8810,21,340,Arkalochóri,GR,11.6,True
+46.5,6.5,8397,22,215,Morges,CH,1.3,True
+46.5,6.25,2669,24,208,Gland,CH,8.9,True
+44.75,11.25,5242,10,197,Cento,IT,3.6,True
+46.0,6.0,1177,19,170,Poisy,FR,10.0,True
+48.5,10.75,729,20,159,Langweid,DE,7.7,True
+35.25,25.0,1545,36,131,Gázi,GR,10.3,True
+35.25,25.5,3567,3,124,Ágios Nikólaos,GR,20.6,True
+44.25,11.0,785,9,116,Pavullo nel Frignano,IT,16.1,True
+46.25,6.5,1533,11,106,Thonon-les-Bains,FR,13.5,True
+44.0,13.0,4749,5,92,Pesaro,IT,12.1,True
+46.0,5.5,2196,6,84,Ambérieu-en-Bugey,FR,12.3,True
+46.0,6.25,535,13,78,La Roche-sur-Foron,FR,9.0,True
+48.5,11.0,454,8,78,Affing,DE,3.9,True
+46.5,6.75,572,16,69,Lutry,CH,4.9,True
+44.5,11.75,282,14,68,Massa Lombarda,IT,8.1,True
+44.25,11.75,195,17,66,Brisighella,IT,3.6,True
+43.25,12.25,3613,3,65,Umbertide,IT,9.2,True
+44.5,11.0,249,16,61,Vignola,IT,2.0,True
+44.25,12.0,337,13,59,Forlì,IT,4.6,True
+44.0,12.75,736,8,57,Cattolica,IT,4.4,True
+48.25,10.75,563,10,56,Bobingen,DE,6.6,True
+44.0,11.0,108,4,53,Montale,IT,7.4,True
+44.25,12.25,330,16,52,Cervia,IT,7.9,True
+44.0,12.5,305,12,51,Dogana,SM,2.3,True
+44.25,11.25,869,11,47,Sasso Marconi,IT,16.8,True
+46.0,5.75,515,12,45,Bellegarde-sur-Valserine,FR,13.3,True
+44.75,10.75,157,11,42,Correggio,IT,3.3,True
+46.0,6.5,307,13,40,Scionzier,FR,7.8,True
+45.5,10.25,131,3,33,Borgosatollo,IT,2.7,True
+45.5,10.75,573,5,32,Castelnuovo del Garda,IT,6.8,True
+42.5,14.0,370,6,32,Penne,IT,7.8,True
+44.75,11.5,364,14,32,Poggio Renatico,IT,2.0,True
+44.75,11.0,164,13,32,Soliera,IT,6.4,True
+45.75,9.5,1674,1,29,Calolziocorte,IT,7.0,False
+45.25,10.75,141,6,29,Marmirolo,IT,3.4,True
+35.0,26.0,90,2,29,Ierápetra,GR,23.5,True
+43.75,13.0,126,7,26,Lucrezia,IT,5.5,True
+45.5,10.0,80,3,26,Castrezzato,IT,1.9,True
+46.25,5.75,68,5,26,Oyonnax,FR,7.2,True
+45.75,9.75,249,1,25,Nembro,IT,1.1,False
+42.5,13.75,594,1,24,Montorio al Vomano,IT,12.9,False
+45.0,10.75,78,4,23,Suzzara,IT,1.0,True
+45.5,11.0,72,5,23,Arbizzano-Santa Maria,IT,4.8,True
+45.25,11.0,30,4,23,Isola della Scala,IT,2.3,True
+45.5,10.5,64,3,22,Desenzano del Garda,IT,4.2,True
+46.0,6.75,137,11,21,Passy,FR,9.5,True
+45.75,6.0,226,9,20,Aix-les-Bains,FR,9.6,True
+46.25,5.5,41,6,20,Oyonnax,FR,12.1,True
+40.75,14.25,84,4,19,Posillipo,IT,8.2,True
+42.5,14.25,146,5,18,Pescara,IT,6.0,True
+45.5,11.5,589,4,17,Altavilla Vicentina,IT,2.8,True
+46.25,7.0,373,7,17,Bex,CH,0.8,True
+42.75,14.0,114,7,17,Giulianova,IT,2.8,True
+43.5,13.5,54,8,17,Osimo,IT,2.2,True
+42.25,14.0,304,2,16,Chieti Scalo,IT,16.6,True
+46.75,6.5,112,7,16,Orbe,CH,3.6,True
+43.25,13.75,31,8,16,Porto Sant'Elpidio,IT,0.9,True
+44.25,12.5,277,7,15,Cesenatico,IT,9.8,True
+46.5,7.0,229,9,15,Châtel-Saint-Denis,CH,8.2,True
+45.5,9.25,150,10,15,Parco Lambro - Cimiano,IT,0.3,True
+46.75,6.75,93,10,15,Yverdon-les-Bains,CH,8.9,True
+43.5,13.25,346,5,14,Jesi,IT,2.4,True
+39.75,18.25,168,1,14,Gagliano del Capo,IT,14.6,False
+48.75,2.25,142,6,14,Verrières-le-Buisson,FR,1.4,True
+43.75,11.0,100,3,14,Capraia e Limite,IT,1.4,True
+43.75,11.25,50,8,14,Florence,IT,3.3,True
+46.75,7.0,46,10,14,Romont,CH,8.6,True
+47.0,7.0,32,8,14,Neuchâtel,CH,5.3,True
+46.25,7.25,529,5,13,Conthey,CH,5.0,True
+45.25,5.75,136,6,13,Meylan,FR,5.0,True
+45.5,6.0,113,8,13,Pontcharra,FR,7.3,True
+44.0,11.25,81,8,13,Barberino di Mugello,IT,1.1,True
+46.0,5.25,38,5,13,Ambérieu-en-Bugey,FR,9.1,True
+43.0,12.25,36,3,13,Chiugiana-La Commenda,IT,11.9,True
+43.75,13.25,35,8,13,Senigallia,IT,5.0,True
+53.5,-2.25,558,2,12,Cheetham Hill,GB,0.8,True
+45.0,5.25,516,3,12,Romans-sur-Isère,FR,15.5,True
+39.0,17.0,128,2,12,Cutro,IT,4.0,True
+44.75,10.25,96,6,12,Collecchio,IT,2.7,True
+45.25,9.75,33,3,12,Castelleone,IT,5.2,True
+44.0,12.25,29,2,12,Acquaviva,SM,14.8,True
+39.0,8.5,21,1,12,Sant'Antioco,IT,8.8,False
+46.0,11.25,239,1,11,Levico Terme,IT,4.4,False
+47.0,7.5,122,8,11,Bolligen,CH,2.8,True
+45.0,10.0,66,6,11,Fiorenzuola d'Arda,IT,10.8,True
+43.75,12.0,25,1,11,Bibbiena,IT,15.9,False
+43.0,14.0,15,6,11,Grottammare,IT,11.0,False
+46.25,6.75,104,7,10,Collombey,CH,15.4,True
+47.5,8.5,46,8,10,Bülach,CH,3.9,True
+44.75,10.5,24,6,10,Sant'Ilario d'Enza,IT,4.3,True
+46.25,5.25,20,7,10,Viriat,FR,2.7,True
+48.75,10.75,20,2,10,Donauwörth,DE,4.2,True
+46.75,12.25,427,2,9,Brunico,IT,24.7,False
+46.25,11.75,260,2,9,Feltre,IT,28.0,False
+47.25,8.0,207,5,9,Zofingen,CH,5.9,False
+42.0,12.5,204,3,9,Casal de' Pazzi,IT,9.6,False
+47.75,12.0,105,1,9,Bad Feilnbach,DE,2.7,False
+43.75,12.75,64,2,9,Fossombrone,IT,8.3,False
+46.0,7.0,56,4,9,Martigny-Ville,CH,12.7,False
+45.25,9.5,38,6,9,Lodi,IT,6.7,False
+45.0,9.75,33,3,9,Pontenure,IT,3.3,False
+43.75,-1.25,30,1,9,Soustons,FR,6.4,False
+47.0,7.25,15,6,9,Wohlen,CH,8.7,False
+44.25,11.5,121,6,8,Castel San Pietro Terme,IT,17.9,False
+45.5,9.0,99,7,8,Pregnana Milanese,IT,1.9,False
+45.75,10.0,87,2,8,Lovere,IT,8.9,False
+45.5,12.25,85,4,8,Mestre,IT,1.0,False
+45.75,5.75,80,6,8,Belley,FR,4.9,False
+46.5,13.5,59,1,8,Bovec,SI,18.4,False
+45.75,11.5,57,3,8,Thiene,IT,4.8,False
+43.75,10.5,38,6,8,Pontasserchio,IT,7.4,False
+49.5,11.0,21,2,8,Fürth,DE,2.8,False
+45.0,11.75,17,4,8,Rovigo,IT,8.4,False
+45.0,11.5,14,4,8,Badia Polesine,IT,10.6,False
+47.25,7.5,14,5,8,Solothurn,CH,5.5,False
+35.0,25.0,12,3,8,Moíres,GR,12.9,False
+40.5,-3.75,838,2,7,Fuencarral-El Pardo,ES,1.6,False
+42.0,14.0,633,2,7,Sulmona,IT,8.2,False
+50.75,4.25,546,2,7,Buizingen,BE,0.9,False
+46.5,12.25,452,2,7,Cortina d'Ampezzo,IT,9.4,False
+45.25,4.75,407,1,7,Annonay,FR,6.3,False
+46.75,7.25,222,4,7,Marly,CH,7.1,False
+52.25,21.0,186,2,7,Żoliborz,PL,2.3,False
+48.0,7.0,175,2,7,La Bresse,FR,10.0,False
+48.75,-1.25,158,1,7,Avranches,FR,10.7,False
+44.0,10.0,113,2,7,Marina di Carrara,IT,5.4,False
+40.75,15.75,111,1,7,Avigliano,IT,3.2,False
+46.0,4.75,41,2,7,Jassans-Riottier,FR,2.3,False
+48.25,11.5,33,3,7,Karlsfeld,DE,3.1,False
+48.75,2.5,24,5,7,Boissy-Saint-Léger,FR,0.9,False
+43.25,12.5,23,3,7,Gubbio,IT,12.6,False
+45.5,12.0,19,5,7,Pianiga,IT,4.8,False
+48.0,7.25,16,3,7,Wintzenheim,FR,8.6,False
+47.25,7.75,15,4,7,Langenthal,CH,5.2,False
+43.0,13.75,12,4,7,Grottammare,IT,9.8,False
+45.25,5.5,9,5,7,Tullins,FR,5.9,False
+45.75,4.75,230,4,6,Francheville,FR,1.8,False
+42.25,13.5,125,1,6,L'Aquila,IT,13.9,False
+40.5,-3.5,104,3,6,Paracuellos de Jarama,ES,2.4,False
+44.5,12.25,104,5,6,Lido Adriano,IT,10.3,False
+49.0,2.25,42,2,6,Le Plessis-Bouchard,FR,1.2,False
+48.25,16.25,37,2,6,Hernals,AT,5.1,False
+43.75,10.75,28,4,6,Santa Croce sull'Arno,IT,4.1,False
+44.0,10.75,26,4,6,Montecatini-Terme,IT,13.3,False
+47.25,7.25,23,4,6,Moutier,CH,9.5,False
+36.75,-4.5,20,2,6,Málaga,ES,7.8,False
+45.5,11.75,13,4,6,Camisano Vicentino,IT,4.0,False
+43.5,12.25,6,1,6,Città di Castello,IT,4.0,False
+45.75,6.25,294,2,5,Faverges,FR,3.2,False
+44.25,5.25,230,1,5,Vaison-la-Romaine,FR,14.0,False
+42.0,15.0,115,3,5,Termoli,IT,0.5,False
+43.0,12.5,110,3,5,Bastia umbra,IT,8.1,False
+41.0,9.5,103,2,5,Olbia,IT,8.5,False
+53.25,-6.25,81,2,5,Ballinteer,IE,2.7,False
+43.0,10.5,80,1,5,Piombino,IT,8.5,False
+47.5,8.0,77,3,5,Murg,DE,6.3,False
+47.5,10.75,52,2,5,Reutte,AT,3.1,False
+46.75,10.0,44,2,5,Davos,CH,13.8,False
+44.5,12.0,37,4,5,Alfonsine,IT,3.1,False
+43.75,-1.5,36,1,5,Capbreton,FR,13.2,False
+41.75,12.75,31,1,5,Rocca Priora,IT,2.2,False
+46.5,7.25,28,2,5,Saanen,CH,1.4,False
+48.25,6.25,27,1,5,Mirecourt,FR,10.4,False
+48.75,0.0,26,1,5,Argentan,FR,1.6,False
+52.5,13.5,26,1,5,Rummelsburg,DE,0.5,False
+38.5,16.25,22,1,5,Serra San Bruno,IT,10.6,False
+45.25,4.5,20,1,5,Annonay,FR,13.4,False
+45.25,6.0,18,3,5,Villard-Bonnot,FR,9.3,False
+41.0,17.0,14,2,5,Rutigliano,IT,1.2,False
+45.75,7.0,14,3,5,Chamonix-Mont-Blanc,FR,21.8,False
+45.75,7.25,13,3,5,Aosta,IT,5.4,False
+41.0,16.75,12,2,5,Grumo Appula,IT,3.7,False
+45.25,5.25,12,3,5,Saint-Marcellin,FR,12.4,False
+45.5,5.75,8,4,5,Cognin,FR,12.8,False
+45.75,9.0,8,1,5,Lurate Caccivio,IT,1.9,False
+35.0,25.75,7,2,5,Ierápetra,GR,1.5,False
+45.75,5.25,7,4,5,Tignieu,FR,4.7,False
+45.25,9.25,6,4,5,Siziano,IT,8.2,False
+48.75,-3.0,317,1,4,Paimpol,FR,4.6,False
+47.5,8.25,233,2,4,Untersiggenthal,CH,0.5,False
+42.0,16.0,231,2,4,Vico del Gargano,IT,12.0,False
+47.0,6.75,211,3,4,Le Locle,CH,6.2,False
+48.75,-3.25,169,1,4,Paimpol,FR,15.2,False
+49.0,2.5,153,1,4,Goussainville,FR,2.9,False
+44.25,5.0,115,2,4,Vaison-la-Romaine,FR,6.1,False
+44.25,10.75,88,4,4,Pavullo nel Frignano,IT,11.5,False
+43.75,-79.5,86,1,4,Glenfield-Jane Heights,CA,1.2,False
+45.0,6.0,86,1,4,La Mure,FR,19.9,False
+43.5,12.75,82,1,4,Cagli,IT,9.5,False
+46.75,10.25,80,1,4,Davos,CH,32.0,False
+13.75,100.5,75,1,4,Bangkok,TH,0.5,False
+43.0,13.0,72,2,4,Foligno,IT,24.7,False
+46.75,11.0,65,1,4,Merano,IT,15.2,False
+46.75,11.25,65,1,4,Merano,IT,11.4,False
+43.5,11.75,62,2,4,Arezzo,IT,11.3,False
+43.75,4.75,56,1,4,Saint-Rémy-de-Provence,FR,7.8,False
+44.25,3.25,44,1,4,Millau,FR,21.6,False
+46.25,7.5,40,2,4,Sierre,CH,5.4,False
+45.75,5.0,38,3,4,Meyzieu,FR,1.8,False
+45.25,11.5,33,3,4,Montagnana,IT,3.4,False
+44.0,10.25,25,2,4,Ripa-Pozzi-Querceta-Ponterosso,IT,4.4,False
+43.5,5.25,22,1,4,Rognac,FR,1.9,False
+42.5,12.0,19,1,4,Montefiascone,IT,5.4,False
+41.0,14.25,18,3,4,Gricignano di Aversa,IT,2.8,False
+47.25,8.5,18,3,4,Affoltern am Albis,CH,4.8,False
+42.25,13.75,17,2,4,Popoli,IT,11.2,False
+51.0,11.5,17,1,4,Apolda,DE,3.1,False
+42.0,13.75,16,2,4,Pratola Peligna,IT,14.9,False
+46.5,4.25,16,3,4,Paray-le-Monial,FR,11.4,False
+47.5,9.75,14,2,4,Bregenz,AT,0.4,False
+41.5,15.5,13,3,4,Foggia,IT,6.3,False
+46.75,6.25,12,2,4,Pontarlier,FR,18.9,False
+48.25,11.75,9,2,4,Ismaning,DE,5.3,False
+50.5,3.0,9,1,4,Libercourt,FR,2.2,False
+45.25,11.75,7,3,4,Monselice,IT,1.2,False
+48.0,11.5,7,1,4,Schäftlarn,DE,3.5,False
+48.0,12.0,6,1,4,Grafing bei München,DE,5.6,False
+41.75,15.5,4,2,4,Apricena,IT,6.2,False
+43.5,13.75,4,3,4,Porto Recanati,IT,10.3,False
+45.0,7.75,455,1,3,Trofarello,IT,2.0,False
+54.5,-3.0,263,1,3,Windermere,GB,14.5,False
+40.75,23.0,237,1,3,Lagkadás,GR,5.6,False
+36.75,10.25,182,1,3,Mégrine,TN,2.5,False
+47.5,19.0,173,1,3,Orbánhegy,HU,0.7,False
+36.75,-4.25,157,1,3,Valdés,ES,1.2,False
+43.25,5.5,139,2,3,La Penne-sur-Huveaune,FR,3.8,False
+40.75,17.25,119,2,3,Alberobello,IT,4.0,False
+40.75,14.5,106,2,3,Pompei,IT,0.5,False
+46.75,8.75,103,1,3,Altdorf,CH,16.6,False
+41.0,16.5,102,1,3,Ruvo di Puglia,IT,13.1,False
+40.75,16.5,86,1,3,Altamura,IT,9.5,False
+48.75,-3.5,86,1,3,Lannion,FR,3.7,False
+41.75,13.25,85,2,3,Fiuggi,IT,5.7,False
+46.5,8.25,46,1,3,Naters,CH,27.9,False
+47.0,12.0,43,1,3,Valle Aurina - Ahrntal,IT,1.6,False
+45.5,4.5,27,1,3,Saint-Chamond,FR,2.9,False
+44.75,1.5,26,1,3,Gourdon,FR,9.6,False
+44.25,3.5,25,1,3,Mende,FR,30.2,False
+41.25,2.0,22,1,3,Castelldefels,ES,4.0,False
+43.75,10.25,22,1,3,Torre del Lago Puccini,IT,9.3,False
+45.0,5.75,20,2,3,Vif,FR,8.8,False
+43.25,13.25,19,3,3,Tolentino,IT,5.4,False
+48.0,10.75,17,2,3,Buchloe,DE,4.5,False
+45.5,5.5,16,3,3,La Tour-du-Pin,FR,8.5,False
+47.0,9.5,16,1,3,Bad Ragaz,CH,0.7,False
+44.0,5.0,15,2,3,Monteux,FR,4.0,False
+53.5,-6.25,15,2,3,Swords,IE,5.0,False
+43.5,5.5,14,1,3,Aix-en-Provence,FR,5.1,False
+44.25,9.25,14,2,3,Chiavari,IT,9.5,False
+47.5,12.25,14,1,3,Kirchberg in Tirol,AT,7.8,False
+51.25,12.5,14,1,3,Großpösna,DE,1.9,False
+43.5,10.5,12,2,3,Rosignano Marittimo,IT,10.6,False
+43.0,12.75,11,2,3,Foligno,IT,6.3,False
+45.0,5.0,11,3,3,Bourg-de-Péage,FR,5.3,False
+47.75,12.25,11,1,3,Aschau im Chiemgau,DE,6.2,False
+40.0,18.0,10,1,3,Gallipoli,IT,6.3,False
+43.75,-79.25,10,1,3,Eglinton East,CA,1.3,False
+45.5,9.5,10,2,3,Cassano d'Adda,IT,3.2,False
+47.0,6.25,10,1,3,Pontarlier,FR,13.4,False
+47.25,8.75,10,2,3,Hombrechtikon,CH,1.7,False
+41.25,16.25,9,2,3,Andria,IT,4.5,False
+43.25,11.75,9,2,3,Sinalunga,IT,3.9,False
+44.5,4.75,9,3,3,Montélimar,FR,6.1,False
+45.75,11.25,9,2,3,Schio,IT,9.3,False
+46.5,13.75,9,1,3,Kranjska Gora,SI,5.3,False
+47.0,9.75,9,2,3,Igis,CH,14.8,False
+46.5,6.0,8,2,3,Morez,FR,3.4,False
+47.5,7.75,8,2,3,Liestal,CH,2.1,False
+48.5,-3.25,8,1,3,Guingamp,FR,10.0,False
+47.0,9.25,7,2,3,Glarus,CH,14.5,False
+43.5,13.0,6,2,3,Fabriano,IT,19.5,False
+45.5,7.75,6,2,3,Ivrea,IT,10.5,False
+47.25,5.5,6,2,3,Auxonne,FR,10.6,False
+47.25,6.25,6,1,3,Valdahon,FR,13.4,False
+47.25,6.5,6,1,3,Baume-les-Dames,FR,15.5,False
+48.0,6.75,6,2,3,La Bresse,FR,8.6,False
+48.0,11.75,6,1,3,Höhenkirchen-Siegertsbrunn,DE,3.1,False
+36.5,28.25,5,2,3,Rhodes,GR,7.6,False
+43.25,2.25,5,1,3,Carcassonne,FR,8.8,False
+45.5,8.25,5,3,3,Cossato,IT,9.3,False
+45.5,8.75,5,3,3,Turbigo,IT,3.6,False
+47.75,7.25,5,2,3,Lutterbach,FR,2.5,False
+35.5,24.0,4,2,3,Mourniés,GR,2.3,False
+42.0,15.25,4,2,3,Lesina,IT,17.6,False
+42.25,14.25,3,1,3,Lanciano,IT,11.8,False
+45.0,10.25,3,2,3,Colorno,IT,12.8,False
+45.25,12.0,3,3,3,Piove di Sacco-Piovega,IT,5.9,False
+46.0,7.25,3,2,3,Bagnes,CH,9.6,False
+48.0,6.25,3,1,3,Luxeuil-les-Bains,FR,22.1,False
+48.25,10.5,3,1,3,Thannhausen,DE,4.4,False
+48.25,11.25,3,2,3,Maisach,DE,3.9,False
+40.0,16.25,127,1,2,Senise,IT,16.6,False
+53.5,22.75,94,1,2,Mońki,PL,11.0,False
+41.0,16.25,86,1,2,Spinazzola,IT,13.9,False
+47.0,2.5,86,1,2,Saint-Germain-du-Puy,FR,11.2,False
+44.25,5.75,78,1,2,Sisteron,FR,17.0,False
+44.25,-76.5,77,1,2,Kingscourt,CA,0.5,False
+45.5,-75.75,73,1,2,Chelsea,CA,2.5,False
+39.5,20.75,71,1,2,Dodóni,GR,5.2,False
+42.5,12.5,69,1,2,Narni,IT,3.1,False
+44.25,10.0,66,1,2,Santo Stefano di Magra,IT,12.9,False
+51.5,-2.25,48,1,2,Corsham,GB,8.6,False
+38.0,23.75,42,1,2,Galátsi,GR,1.9,False
+41.75,16.0,42,1,2,Monte Sant'Angelo,IT,5.9,False
+45.75,11.75,36,2,2,San Zeno-San Giuseppe,IT,1.2,False
+47.5,-2.75,34,1,2,Sarzeau,FR,3.4,False
+47.25,0.5,32,2,2,Monts,FR,9.9,False
+48.25,7.25,29,1,2,Sainte-Marie-aux-Mines,FR,4.9,False
+50.5,4.5,29,1,2,Fleurus,BE,4.0,False
+47.0,11.0,28,1,2,Axams,AT,33.3,False
+41.75,12.5,25,1,2,Selcetta,IT,2.7,False
+47.25,6.0,24,1,2,Besançon,FR,1.4,False
+48.0,11.25,22,2,2,Seefeld,DE,4.7,False
+41.75,15.75,21,2,2,San Giovanni Rotondo,IT,5.2,False
+47.5,10.5,21,1,2,Pfronten,DE,9.9,False
+47.25,10.75,20,1,2,Imst,AT,1.0,False
+44.75,12.25,18,2,2,Comacchio,IT,8.2,False
+50.25,-5.5,18,1,2,St Ives,GB,4.7,False
+46.5,12.5,17,1,2,Cortina d'Ampezzo,IT,27.9,False
+41.25,28.75,16,2,2,İmrahor,TR,3.7,False
+46.0,12.25,15,1,2,Vittorio Veneto,IT,4.5,False
+48.75,1.75,15,1,2,Le Perray-en-Yvelines,FR,10.0,False
+42.75,140.75,14,1,2,Niseko,JP,8.4,False
+46.75,9.5,14,1,2,Domat,CH,10.2,False
+46.0,11.5,13,2,2,Borgo Valsugana,IT,6.6,False
+46.75,2.5,13,2,2,Saint-Amand-Montrond,FR,3.0,False
+40.5,22.0,12,1,2,Náousa,GR,15.5,False
+45.5,4.75,11,2,2,Chasse-sur-Rhône,FR,9.9,False
+53.25,-2.25,11,1,2,Macclesfield,GB,8.4,False
+39.75,20.75,10,1,2,Ioánnina,GR,13.0,False
+43.5,10.25,10,2,2,Livorno,IT,7.9,False
+44.5,9.0,10,2,2,Serra Riccò,IT,5.1,False
+45.0,11.0,10,1,2,San Benedetto Po,IT,7.3,False
+46.25,12.25,10,1,2,Ponte nelle Alpi-Polpet,IT,7.2,False
+47.0,8.75,10,1,2,Schwyz,CH,7.6,False
+53.25,22.5,10,1,2,Mońki,PL,26.2,False
+43.75,11.5,9,1,2,Pontassieve,IT,6.2,False
+44.75,1.75,9,1,2,Figeac,FR,27.2,False
+46.75,9.75,9,1,2,Davos,CH,9.0,False
+47.25,5.25,9,1,2,Genlis,FR,2.1,False
+48.75,-1.5,9,1,2,Granville,FR,12.1,False
+48.75,6.25,9,1,2,Seichamps,FR,4.0,False
+49.25,10.0,9,1,2,Rot am See,DE,1.2,False
+51.75,10.5,9,1,2,Braunlage,DE,8.1,False
+35.5,23.75,8,1,2,Mourniés,GR,23.8,False
+40.0,16.0,8,2,2,Praia a Mare,IT,21.8,False
+43.5,1.25,8,1,2,Fonsorbes,FR,4.7,False
+45.0,6.25,8,1,2,Saint-Jean-de-Maurienne,FR,31.7,False
+45.5,8.0,8,2,2,Biella,IT,8.3,False
+46.5,5.25,8,1,2,Louhans,FR,14.2,False
+46.75,5.5,8,1,2,Lons-le-Saunier,FR,9.3,False
+46.75,12.5,8,1,2,Lienz,AT,22.3,False
+47.0,5.5,8,1,2,Dole,FR,10.3,False
+47.5,-0.25,8,2,2,Beaufort-en-Vallée,FR,7.1,False
+47.75,10.75,8,1,2,Marktoberdorf,DE,10.5,False
+41.0,15.75,7,1,2,Lavello,IT,6.2,False
+43.25,10.5,7,1,2,Cecina,IT,6.4,False
+43.5,1.5,7,1,2,Castanet-Tolosan,FR,1.8,False
+44.25,4.75,7,2,2,Bollène,FR,3.5,False
+45.75,6.5,7,2,2,Ugine,FR,6.6,False
+46.25,8.0,7,1,2,Naters,CH,8.4,False
+46.75,9.25,7,1,2,Domat,CH,18.0,False
+47.5,5.25,7,1,2,Saint-Apollinaire,FR,22.4,False
+40.75,13.75,6,1,2,Forio,IT,9.4,False
+43.25,12.0,6,2,2,Camucia-Monsigliolo,IT,2.6,False
+44.75,4.75,6,2,2,Loriol-sur-Drôme,FR,5.3,False
+46.5,3.25,6,2,2,Moulins,FR,9.6,False
+47.25,9.0,6,1,2,Uznach,CH,3.2,False
+47.5,-0.5,6,2,2,Angers,FR,5.0,False
+47.75,6.5,6,1,2,Lure,FR,7.5,False
+48.75,-0.25,6,1,2,Falaise,FR,16.3,False
+53.75,-2.75,6,1,2,Preston,GB,3.3,False
+40.5,18.0,5,1,2,San Pietro Vernotico,IT,1.3,False
+41.75,15.25,5,1,2,San Paolo di Civitate,IT,1.5,False
+45.0,4.75,5,2,2,Saint-Péray,FR,9.4,False
+47.25,11.0,5,1,2,Telfs,AT,8.2,False
+47.75,7.0,5,1,2,Thann,FR,10.0,False
+31.25,121.75,4,1,2,Jinqiao,CN,15.1,False
+40.25,18.0,4,1,2,Leverano,IT,4.3,False
+40.75,14.0,4,1,2,Procida,IT,1.4,False
+40.75,14.75,4,2,2,Baronissi,IT,2.0,False
+41.25,16.5,4,2,2,Bisceglie,IT,0.8,False
+43.5,12.5,4,1,2,Cagli,IT,13.4,False
+44.5,4.0,4,1,2,Aubenas,FR,33.7,False
+45.0,1.5,4,1,2,Brive-la-Gaillarde,FR,17.9,False
+45.25,4.25,4,1,2,Sainte-Sigolène,FR,1.5,False
+45.75,12.25,4,1,2,Spresiano,IT,3.3,False
+47.0,11.25,4,1,2,Vipiteno,IT,18.1,False
+47.25,0.0,4,2,2,Saumur,FR,6.0,False
+47.25,1.75,4,2,2,Romorantin-Lanthenay,FR,13.0,False
+47.5,-0.75,4,2,2,Avrillé,FR,12.1,False
+48.25,-4.75,4,1,2,Plouzané,FR,17.6,False
+35.0,25.5,3,1,2,Ierápetra,GR,22.1,False
+35.25,25.75,3,2,2,Ágios Nikólaos,GR,7.3,False
+40.25,15.75,3,2,2,Lagonegro,IT,13.6,False
+40.5,15.0,3,2,2,Battipaglia,IT,12.2,False
+41.0,14.5,3,2,2,San Felice A Cancello,IT,2.2,False
+41.75,13.0,3,2,2,Colleferro,IT,2.6,False
+42.0,14.75,3,2,2,Montenero di Bisaccia,IT,4.7,False
+43.25,13.5,3,1,2,Corridonia,IT,0.7,False
+43.5,11.5,3,2,2,Montevarchi,IT,6.5,False
+44.0,12.0,3,1,2,Meldola,IT,15.1,False
+44.5,10.75,3,2,2,Castellarano,IT,2.3,False
+45.75,7.5,3,1,2,Aosta,IT,14.3,False
+46.25,3.0,3,2,2,Commentry,FR,20.3,False
+46.5,3.75,3,2,2,Bourbon-Lancy,FR,13.7,False
+47.5,7.5,3,1,2,Therwil,CH,4.3,False
+48.5,-3.0,3,1,2,Guingamp,FR,13.2,False
+51.0,11.0,3,1,2,Johannesvorstadt,DE,2.6,False
+35.0,24.75,2,2,2,Tympáki,GR,8.3,False
+39.0,8.25,2,1,2,Carloforte,IT,16.3,False
+39.0,16.75,2,1,2,Mesoraca,IT,9.4,False
+40.5,18.25,2,1,2,Surbo,IT,15.3,False
+40.75,18.0,2,1,2,Brindisi,IT,14.2,False
+41.5,13.75,2,2,2,Cassino,IT,6.7,False
+41.5,15.75,2,2,2,Carapelle,IT,15.9,False
+44.75,10.0,2,1,2,Salsomaggiore Terme,IT,7.4,False
+45.0,9.0,2,2,2,Voghera,IT,1.3,False
+45.25,8.25,2,1,2,Trino,IT,7.1,False
+45.75,7.75,2,2,2,Zermatt,CH,30.0,False
+46.25,7.75,2,1,2,Visp,CH,11.2,False
+46.25,10.75,2,1,2,Cles,IT,25.1,False
+46.5,10.0,2,2,2,Tirano,IT,34.1,False
+47.5,6.5,2,2,2,Baume-les-Dames,FR,19.4,False
+47.75,7.5,2,1,2,Schliengen,DE,5.8,False
+48.0,3.75,2,2,2,Saint-Florentin,FR,1.9,False
+48.0,5.5,2,2,2,Langres,FR,19.7,False
+48.25,5.75,2,2,2,Neufchâteau,FR,12.4,False
+48.75,2.75,2,1,2,Gretz-Armainvilliers,FR,1.7,False
+52.5,-2.0,2,2,2,Oldbury,GB,1.1,False
+53.5,-2.5,2,1,2,Leigh,GB,1.4,False
+43.25,11.25,81,1,1,Siena,IT,10.0,False
+48.0,-1.75,52,1,1,Bruz,FR,2.7,False
+44.25,10.5,50,1,1,Castelnovo ne'Monti,IT,22.0,False
+43.0,13.25,39,1,1,Tolentino,IT,23.4,False
+42.0,12.75,37,1,1,Guidonia Montecelio,IT,2.4,False
+45.0,12.25,37,1,1,Taglio di Po,IT,2.8,False
+48.25,-4.5,36,1,1,Crozon,FR,0.8,False
+36.75,-5.25,29,1,1,Ronda,ES,7.4,False
+42.5,12.25,25,1,1,Soriano nel Cimino,IT,9.2,False
+40.5,21.25,22,1,1,Kastoria,GR,2.7,False
+40.25,-3.75,21,1,1,Parla,ES,2.1,False
+44.0,11.75,18,1,1,Brisighella,IT,24.8,False
+54.5,-3.25,18,1,1,Cleator Moor,GB,17.3,False
+45.25,12.25,17,1,1,Chioggia,IT,4.1,False
+44.0,4.75,16,1,1,Villeneuve-lès-Avignon,FR,4.9,False
+41.5,2.25,15,1,1,Tiana,ES,2.5,False
+45.0,11.25,15,1,1,Ostiglia,IT,11.9,False
+45.75,4.0,15,1,1,Montbrison,FR,16.6,False
+46.5,8.5,15,1,1,Biasca,CH,39.2,False
+51.5,-2.75,15,1,1,Portishead,GB,2.4,False
+52.75,22.0,15,1,1,Małkinia Górna,PL,6.7,False
+40.5,22.25,14,1,1,Véroia,GR,4.8,False
+41.25,2.25,13,1,1,la Barceloneta,ES,15.3,False
+42.0,16.25,13,1,1,Vieste,IT,14.6,False
+48.5,-2.75,13,1,1,Saint-Brieuc,FR,2.2,False
+41.25,1.5,12,1,1,El Vendrell,ES,4.6,False
+43.75,12.5,12,1,1,Urbania,IT,9.2,False
+48.5,-4.5,12,1,1,Plabennec,FR,5.4,False
+39.75,21.25,11,1,1,Kalampáka,GR,32.6,False
+41.0,17.25,11,1,1,Polignano a Mare,IT,2.5,False
+44.5,9.75,11,1,1,Borgo Val di Taro,IT,1.9,False
+47.75,11.0,11,1,1,Peiting,DE,7.3,False
+44.5,9.5,10,1,1,Borgo Val di Taro,IT,21.4,False
+45.5,4.25,10,1,1,Saint-Just-Saint-Rambert,FR,0.7,False
+46.0,3.5,10,1,1,Bellerive-sur-Allier,FR,14.9,False
+48.25,-4.25,10,1,1,Châteaulin,FR,13.1,False
+42.75,141.75,9,1,1,Abira,JP,10.1,False
+45.0,8.5,8,1,1,Valenza,IT,11.4,False
+46.0,3.75,8,1,1,Thiers,FR,22.4,False
+41.5,2.0,7,1,1,Rubí,ES,2.9,False
+42.5,13.5,7,1,1,Montorio al Vomano,IT,14.4,False
+43.0,140.75,7,1,1,Kozawa,JP,6.6,False
+45.25,5.0,7,1,1,Roussillon,FR,20.0,False
+45.5,3.75,7,1,1,Ambert,FR,5.5,False
+46.0,11.75,7,1,1,Feltre,IT,11.8,False
+47.5,10.25,7,1,1,Sonthofen,DE,3.2,False
+47.75,10.5,7,1,1,Marktoberdorf,DE,9.4,False
+40.0,33.0,6,1,1,İncirli,TR,13.5,False
+41.0,9.75,6,1,1,Olbia,IT,22.8,False
+41.25,1.75,6,1,1,Sant Pere de Ribes,ES,2.3,False
+42.5,12.75,6,1,1,Terni,IT,11.2,False
+44.5,2.0,6,1,1,Figeac,FR,12.4,False
+45.0,6.5,6,1,1,Briançon,FR,15.8,False
+47.0,12.25,6,1,1,Valle Aurina - Ahrntal,IT,20.5,False
+47.25,10.5,6,1,1,Landeck,AT,13.2,False
+48.0,11.0,6,1,1,Dießen am Ammersee,DE,9.4,False
+48.5,-4.25,6,1,1,Landerneau,FR,5.4,False
+49.25,6.25,6,1,1,Talange,FR,5.9,False
+28.75,-17.75,5,1,1,Garachico,ES,3.4,False
+38.25,16.25,5,1,1,Locri,IT,1.5,False
+38.75,16.25,5,1,1,Pizzo,IT,5.5,False
+40.5,15.5,5,1,1,Polla,IT,1.6,False
+43.0,12.0,5,1,1,Castiglione del Lago,IT,14.2,False
+44.5,3.25,5,1,1,Marvejols,FR,6.8,False
+44.5,3.5,5,1,1,Mende,FR,2.4,False
+45.0,1.75,5,1,1,Malemort-sur-Corrèze,FR,24.0,False
+45.0,10.5,5,1,1,Casalmaggiore,IT,6.3,False
+45.25,6.25,5,1,1,Saint-Jean-de-Maurienne,FR,8.5,False
+45.25,6.5,5,1,1,Saint-Jean-de-Maurienne,FR,11.9,False
+46.25,10.0,5,1,1,Tirano,IT,13.2,False
+46.5,2.5,5,1,1,Domérat,FR,15.8,False
+47.5,-2.5,5,1,1,Questembert,FR,18.2,False
+47.5,10.0,5,1,1,Oberstaufen,DE,6.4,False
+47.5,11.0,5,1,1,Garmisch-Partenkirchen,DE,7.2,False
+48.25,16.5,5,1,1,Donaustadt,AT,3.5,False
+53.5,22.5,5,1,1,Grajewo,PL,16.6,False
+36.5,-4.75,4,1,1,Fuengirola,ES,12.0,False
+39.25,16.0,4,1,1,Paola,IT,13.0,False
+40.0,32.75,4,1,1,Batikent,TR,3.9,False
+40.25,16.5,4,1,1,Montalbano Jonico,IT,7.1,False
+40.5,23.0,4,1,1,Trílofos,GR,4.2,False
+41.75,16.25,4,1,1,Vieste,IT,16.1,False
+42.25,12.5,4,1,1,Rignano Flaminio,IT,5.2,False
+43.0,0.5,4,1,1,Lannemezan,FR,16.8,False
+43.5,11.25,4,1,1,Poggibonsi,IT,8.9,False
+44.0,-76.5,4,1,1,Kingston,CA,25.6,False
+45.75,3.5,4,1,1,Thiers,FR,12.4,False
+47.0,2.25,4,1,1,Saint-Florent-sur-Cher,FR,0.5,False
+47.5,9.25,4,1,1,Amriswil,CH,6.3,False
+47.75,-1.25,4,1,1,Châteaubriant,FR,10.2,False
+48.0,-1.5,4,1,1,Janzé,FR,4.5,False
+48.0,16.5,4,1,1,Ebreichsdorf,AT,8.5,False
+48.25,10.0,4,1,1,Vöhringen,DE,6.9,False
+48.5,-1.5,4,1,1,Dol-de-Bretagne,FR,19.3,False
+48.5,6.25,4,1,1,Ludres,FR,14.7,False
+48.75,6.0,4,1,1,Liverdun,FR,4.7,False
+49.0,11.0,4,1,1,Weißenburg in Bayern,DE,4.0,False
+33.5,72.75,3,1,1,Fatehjang,PK,12.3,False
+37.0,15.0,3,1,1,Canicattini Bagni,IT,6.7,False
+37.0,15.25,3,1,1,Siracusa,IT,9.0,False
+40.0,4.25,3,1,1,Alaior,ES,12.1,False
+42.75,141.5,3,1,1,Chitose,JP,14.6,False
+43.25,0.0,3,1,1,Tarbes,FR,6.0,False
+43.25,1.0,3,1,1,Saint-Gaudens,FR,27.4,False
+43.25,2.5,3,1,1,Trèbes,FR,6.5,False
+43.25,12.75,3,1,1,Gualdo Tadino,IT,3.3,False
+43.5,-1.0,3,1,1,Salies-de-Béarn,FR,6.7,False
+43.5,-0.75,3,1,1,Orthez,FR,2.2,False
+43.75,-1.0,3,1,1,Saint-Paul-lès-Dax,FR,5.0,False
+44.5,1.75,3,1,1,Figeac,FR,25.4,False
+44.5,8.75,3,1,1,Arenzano,IT,11.8,False
+44.75,3.75,3,1,1,Mende,FR,32.2,False
+45.0,4.0,3,1,1,Le Puy-en-Velay,FR,10.2,False
+45.25,-75.75,3,1,1,Bridlewood,CA,9.2,False
+45.25,4.0,3,1,1,Monistrol-sur-Loire,FR,14.3,False
+46.25,5.0,3,1,1,Mâcon,FR,15.0,False
+46.5,3.5,3,1,1,Yzeure,FR,13.3,False
+46.5,4.0,3,1,1,Digoin,FR,2.6,False
+46.5,4.5,3,1,1,Saint-Vallier,FR,18.5,False
+46.75,11.75,3,1,1,Bressanone,IT,8.2,False
+47.25,-1.5,3,1,1,Sainte-Luce-sur-Loire,FR,1.4,False
+47.25,0.25,3,1,1,Chinon,FR,9.2,False
+47.25,0.75,3,1,1,Veigné,FR,4.0,False
+47.25,1.25,3,1,1,Loches,FR,23.5,False
+47.25,2.0,3,1,1,Vierzon,FR,6.0,False
+47.5,19.25,3,1,1,Budapest XVII. kerület,HU,2.2,False
+47.75,-0.75,3,1,1,Château-Gontier,FR,9.2,False
+47.75,3.5,3,1,1,Auxerre,FR,7.6,False
+48.25,-2.25,3,1,1,Montfort-sur-Meu,FR,25.1,False
+48.25,-2.0,3,1,1,Montfort-sur-Meu,FR,12.9,False
+48.25,7.5,3,1,1,Sélestat,FR,4.0,False
+48.5,-4.0,3,1,1,Landivisiau,FR,5.2,False
+48.5,-3.75,3,1,1,Morlaix,FR,10.4,False
+48.5,-2.5,3,1,1,Lamballe,FR,3.8,False
+48.5,6.0,3,1,1,Neuves-Maisons,FR,15.3,False
+49.25,11.0,3,1,1,Abenberg,DE,2.7,False
+50.5,-5.0,3,1,1,Newquay,GB,10.7,False
+50.75,3.0,3,1,1,Comines,FR,1.5,False
+51.5,-2.5,3,1,1,Mangotsfield,GB,1.4,False
+52.5,22.0,3,1,1,Węgrów,PL,11.2,False
+28.5,-17.75,2,1,1,Breña Alta,ES,17.0,False
+37.0,10.0,2,1,1,Sidi Tabet,TN,10.7,False
+37.25,-3.5,2,1,1,Cenes de la Vega,ES,10.5,False
+37.5,15.0,2,1,1,Misterbianco,IT,2.2,False
+39.5,2.5,2,1,1,Son Ferrer,ES,0.4,False
+39.75,16.25,2,1,1,Cassano All'Ionio,IT,7.5,False
+40.0,18.25,2,1,1,Ruffano,IT,2.0,False
+40.25,18.25,2,1,1,Calimera,IT,2.5,False
+40.75,22.0,2,1,1,Édessa,GR,7.1,False
+40.75,22.25,2,1,1,Krýa Vrýsi,GR,8.4,False
+40.75,22.5,2,1,1,Koufália,GR,6.8,False
+41.75,15.0,2,1,1,Larino,IT,9.1,False
+42.0,15.75,2,1,1,Cagnano Varano,IT,19.2,False
+42.75,12.0,2,1,1,Orvieto,IT,9.8,False
+42.75,13.25,2,1,1,Ascoli Piceno,IT,28.8,False
+42.75,13.5,2,1,1,Ascoli Piceno,IT,13.0,False
+43.0,6.0,2,1,1,Saint-Mandrier-sur-Mer,FR,10.4,False
+43.25,-0.5,2,1,1,Gan,FR,9.4,False
+43.25,-0.25,2,1,1,Bizanos,FR,9.2,False
+43.25,0.25,2,1,1,Aureilhan,FR,12.5,False
+43.25,1.25,2,1,1,Auterive,FR,21.4,False
+43.25,1.75,2,1,1,Castelnaudary,FR,18.1,False
+43.25,2.0,2,1,1,Castelnaudary,FR,8.5,False
+43.25,2.75,2,1,1,Lézignan-Corbières,FR,5.5,False
+43.25,13.0,2,1,1,Matelica,IT,1.1,False
+43.5,-1.5,2,1,1,Anglet,FR,2.0,False
+43.5,-1.25,2,1,1,Hasparren,FR,13.7,False
+43.75,5.0,2,1,1,Sénas,FR,6.3,False
+44.0,11.5,2,1,1,Borgo San Lorenzo,IT,10.4,False
+44.5,10.5,2,1,1,Castelnovo ne'Monti,IT,10.5,False
+45.0,3.75,2,1,1,Le Puy-en-Velay,FR,11.7,False
+45.0,12.0,2,1,1,Adria,IT,7.5,False
+45.25,8.5,2,1,1,Robbio,IT,8.5,False
+45.25,10.0,2,1,1,Quinzano d'Oglio,IT,7.2,False
+45.25,10.25,2,1,1,Pontevico,IT,12.6,False
+45.75,11.0,2,1,1,Ala,IT,1.2,False
+46.0,8.5,2,1,1,Pallanza-Intra-Suna,IT,8.8,False
+46.0,13.25,2,1,1,Pasian di Prato,IT,7.1,False
+46.25,2.75,2,1,1,Commentry,FR,4.4,False
+46.25,4.75,2,1,1,Charnay-lès-Mâcon,FR,6.9,False
+46.5,2.75,2,1,1,Montluçon,FR,21.1,False
+47.0,2.75,2,1,1,Saint-Germain-du-Puy,FR,23.1,False
+47.25,-1.75,2,1,1,Saint-Étienne-de-Montluc,FR,3.7,False
+47.25,1.0,2,1,1,Loches,FR,13.5,False
+47.25,1.5,2,1,1,Romorantin-Lanthenay,FR,22.9,False
+47.5,-2.25,2,1,1,Pontchâteau,FR,13.5,False
+47.5,-2.0,2,1,1,Pontchâteau,FR,9.8,False
+47.5,-1.25,2,1,1,Ancenis,FR,16.1,False
+47.5,-1.0,2,1,1,Ancenis,FR,19.4,False
+47.5,6.75,2,1,1,Montbéliard,FR,3.8,False
+47.75,-1.0,2,1,1,Craon,FR,11.5,False
+47.75,11.5,2,1,1,Bad Tölz,DE,4.6,False
+47.75,11.75,2,1,1,Gmund am Tegernsee,DE,0.9,False
+48.25,3.25,2,1,1,Sens,FR,6.3,False
+48.25,6.0,2,1,1,Vittel,FR,6.7,False
+48.5,-3.5,2,1,1,Carhaix-Plouguer,FR,25.5,False
+48.75,0.25,2,1,1,Argentan,FR,19.8,False
+48.75,9.0,2,1,1,Magstadt,DE,2.5,False
+49.0,0.25,2,1,1,Lisieux,FR,16.4,False
+51.75,-2.25,2,1,1,Stonehouse,GB,2.3,False
+52.0,21.0,2,1,1,Piaseczno,PL,9.2,False
+52.75,-2.0,2,1,1,Rugeley,GB,4.4,False
+54.25,-2.75,2,1,1,Kendal,GB,8.5,False
+34.5,131.5,1,1,1,Hagi,JP,13.5,False
+35.25,132.75,1,1,1,Izumo,JP,13.1,False
+36.5,-5.0,1,1,1,San Pedro Alcántara,ES,1.5,False
+38.0,138.0,1,1,1,Sado,JP,31.6,False
+38.5,16.0,1,1,1,Rosarno,IT,2.3,False
+38.75,16.5,1,1,1,Soverato Marina,IT,8.4,False
+39.0,16.25,1,1,1,Sambiase,IT,4.7,False
+39.25,16.25,1,1,1,Cosenza,IT,5.4,False
+39.5,16.25,1,1,1,Bisignano,IT,2.8,False
+39.75,21.0,1,1,1,Ioánnina,GR,15.9,False
+40.25,21.75,1,1,1,Kozáni,GR,6.4,False
+40.25,22.0,1,1,1,Kozáni,GR,18.7,False
+40.5,15.25,1,1,1,Quadrivio,IT,18.6,False
+40.5,16.5,1,1,1,Ferrandina,IT,4.0,False
+40.5,22.75,1,1,1,Néa Michanióna,GR,10.3,False
+40.75,-74.0,1,1,1,Times Square,US,1.3,False
+40.75,9.75,1,1,1,Siniscola,IT,20.1,False
+40.75,17.0,1,1,1,Gioia del Colle,IT,8.5,False
+40.75,17.75,1,1,1,Carovigno,IT,9.1,False
+40.75,22.75,1,1,1,Ágios Athanásios,GR,4.2,False
+41.25,14.0,1,1,1,Teano,IT,5.6,False
+41.25,14.25,1,1,1,Pignataro Maggiore,IT,9.5,False
+41.25,16.0,1,1,1,Canosa di Puglia,IT,6.6,False
+41.25,16.75,1,1,1,Giovinazzo,IT,9.8,False
+41.5,10.75,1,1,1,,,,False
+41.5,14.0,1,1,1,Venafro,IT,4.4,False
+41.5,15.25,1,1,1,Lucera,IT,7.4,False
+42.0,25.25,1,1,1,Parvomay,BG,11.5,False
+42.25,14.5,1,1,1,Lanciano,IT,9.4,False
+42.25,14.75,1,1,1,Vasto,IT,15.8,False
+42.75,12.75,1,1,1,Spoleto,IT,1.4,False
+42.75,13.75,1,1,1,San Nicolò a Tordino,IT,7.1,False
+42.75,18.0,1,1,1,Nova Mokošica,HR,12.7,False
+42.75,141.0,1,1,1,Tōyako-onsemmachi,JP,25.3,False
+42.75,141.25,1,1,1,Shiraoi,JP,23.7,False
+43.0,0.25,1,1,1,Bagnères-de-Bigorre,FR,11.0,False
+43.0,0.75,1,1,1,Saint-Gaudens,FR,12.2,False
+43.0,1.0,1,1,1,Saint-Girons,FR,12.0,False
+43.0,13.5,1,1,1,Ascoli Piceno,IT,17.4,False
+43.25,0.75,1,1,1,Saint-Gaudens,FR,15.9,False
+43.25,21.5,1,1,1,Prokuplje,RS,7.3,False
+43.5,-0.5,1,1,1,Mourenx,FR,17.8,False
+43.5,1.75,1,1,1,Escalquens,FR,15.4,False
+43.5,3.75,1,1,1,Frontignan,FR,5.8,False
+43.5,10.75,1,1,1,Volterra,IT,14.1,False
+43.75,-79.0,1,1,1,Ajax,CA,11.4,False
+43.75,4.25,1,1,1,Milhaud,FR,6.4,False
+44.0,-77.75,1,1,1,Quinte West,CA,18.7,False
+44.0,-77.5,1,1,1,Quinte West,CA,13.2,False
+44.25,9.0,1,1,1,Nervi,IT,15.1,False
+44.25,9.75,1,1,1,Ceparana-Carpena,IT,14.1,False
+44.5,-75.75,1,1,1,Brockville,CA,11.3,False
+44.5,16.5,1,1,1,Sanica,BA,16.8,False
+44.75,-75.75,1,1,1,Brockville,CA,18.3,False
+44.75,4.0,1,1,1,Le Puy-en-Velay,FR,33.9,False
+44.75,9.0,1,1,1,Serravalle Scrivia,IT,11.7,False
+44.75,11.75,1,1,1,Portomaggiore,IT,7.4,False
+45.0,-76.0,1,1,1,Smiths Falls,CA,10.8,False
+45.0,4.5,1,1,1,Tournon-sur-Rhône,FR,27.2,False
+45.0,8.25,1,1,1,Asti,IT,11.4,False
+45.0,9.25,1,1,1,Broni,IT,7.2,False
+45.0,9.5,1,1,1,Borgonovo Valtidone,IT,4.7,False
+45.5,2.25,1,1,1,Ussel,FR,7.1,False
+45.5,2.5,1,1,1,Ussel,FR,15.8,False
+45.5,8.5,1,1,1,Novara,IT,11.1,False
+45.75,4.25,1,1,1,Feurs,FR,2.5,False
+45.75,8.75,1,1,1,Sumirago,IT,3.0,False
+45.75,13.0,1,1,1,Latisana,IT,2.1,False
+46.0,4.0,1,1,1,Riorges,FR,5.9,False
+46.0,5.0,1,1,1,Montluel,FR,17.1,False
+46.0,7.5,1,1,1,Zermatt,CH,19.3,False
+46.0,10.75,1,1,1,Arco,IT,14.0,False
+46.0,11.0,1,1,1,Mattarello,IT,10.1,False
+46.25,4.5,1,1,1,Charnay-lès-Mâcon,FR,22.8,False
+46.25,11.0,1,1,1,Mezzolombardo,IT,8.8,False
+46.25,11.25,1,1,1,Mezzolombardo,IT,12.7,False
+46.25,13.0,1,1,1,Majano,IT,8.4,False
+46.5,3.0,1,1,1,Moulins,FR,26.4,False
+46.5,4.75,1,1,1,Tournus,FR,14.1,False
+46.5,7.5,1,1,1,Frutigen,CH,15.0,False
+46.5,8.0,1,1,1,Naters,CH,19.4,False
+46.5,9.75,1,1,1,Chiavenna,IT,33.5,False
+46.5,13.25,1,1,1,Tolmezzo,IT,20.8,False
+46.75,8.25,1,1,1,Sarnen,CH,16.3,False
+46.75,12.0,1,1,1,Brunico,IT,7.4,False
+47.0,5.25,1,1,1,Dole,FR,20.9,False
+47.0,6.5,1,1,1,Morteau,FR,10.4,False
+47.0,8.25,1,1,1,Kriens,CH,4.4,False
+47.0,8.5,1,1,1,Goldau,CH,6.3,False
+47.25,-2.0,1,1,1,Donges,FR,9.5,False
+47.25,2.25,1,1,1,Mehun-sur-Yèvre,FR,12.8,False
+47.25,4.75,1,1,1,Marsannay-la-Côte,FR,18.2,False
+47.25,9.5,1,1,1,Ruggell,LI,2.3,False
+47.5,0.0,1,1,1,Jumelles,FR,10.6,False
+47.5,4.0,1,1,1,Avallon,FR,7.0,False
+47.5,9.0,1,1,1,Münchwilen,CH,2.5,False
+47.5,12.0,1,1,1,Wörgl,AT,4.8,False
+47.75,3.0,1,1,1,Briare,FR,23.1,False
+47.75,5.25,1,1,1,Langres,FR,14.0,False
+47.75,8.5,1,1,1,Stühlingen,DE,3.9,False
+47.75,12.75,1,1,1,Ruhpolding,DE,7.7,False
+48.0,4.25,1,1,1,Tonnerre,FR,26.1,False
+48.0,5.25,1,1,1,Chaumont,FR,14.8,False
+48.0,7.5,1,1,1,Breisach am Rhein,DE,7.2,False
+48.0,16.75,1,1,1,Bruck an der Leitha,AT,3.3,False
+48.25,-1.75,1,1,1,Melesse,FR,5.3,False
+48.25,5.0,1,1,1,Chaumont,FR,18.7,False
+48.5,2.75,1,1,1,Bois-le-Roi,FR,4.5,False
+48.5,5.75,1,1,1,Neufchâteau,FR,16.5,False
+48.75,2.0,1,1,1,Saint-Quentin-en-Yvelines,FR,2.8,False
+48.75,9.25,1,1,1,Heumaden,DE,1.1,False
+49.0,3.25,1,1,1,La Ferté-sous-Jouarre,FR,10.5,False
+49.0,6.25,1,1,1,Marly,FR,10.0,False
+49.0,10.75,1,1,1,Oettingen in Bayern,DE,11.8,False
+49.25,13.0,1,1,1,Nýrsko,CZ,11.5,False
+49.5,3.0,1,1,1,Thourotte,FR,8.9,False
+49.5,8.75,1,1,1,Hirschberg an der Bergstraße,DE,6.8,False
+49.5,13.75,1,1,1,Blatná,CZ,12.7,False
+50.0,2.5,1,1,1,Corbie,FR,10.4,False
+50.5,1.75,1,1,1,Étaples,FR,8.6,False
+50.5,4.25,1,1,1,Manage,BE,1.1,False
+50.5,12.25,1,1,1,Treuen,DE,6.0,False
+50.75,1.25,1,1,1,Le Portel,FR,23.5,False
+51.0,13.75,1,1,1,Bannewitz,DE,2.4,False
+51.25,0.75,1,1,1,Sittingbourne,GB,10.2,False
+51.75,0.0,1,1,1,Broxbourne,GB,1.4,False
+52.0,-4.75,1,1,1,Cardigan,GB,11.1,False
+52.0,-2.25,1,1,1,Tewkesbury,GB,6.2,False
+52.25,-2.25,1,1,1,Worcester,GB,7.0,False
+52.25,21.25,1,1,1,Sulejówek,PL,1.3,False
+52.5,-5.5,1,1,1,,,,False
+52.5,21.75,1,1,1,Łochów,PL,5.8,False
+52.75,-2.25,1,1,1,Newport,GB,8.8,False
+52.75,21.75,1,1,1,Ostrów Mazowiecka,PL,11.4,False
+53.0,-5.75,1,1,1,Wicklow,IE,20.2,False
+53.0,-1.75,1,1,1,Ashbourne,GB,2.2,False
+53.0,22.5,1,1,1,Wysokie Mazowieckie,PL,9.3,False
+53.25,-2.5,1,1,1,Northwich,GB,1.7,False
+53.25,-2.0,1,1,1,Buxton,GB,6.1,False
+53.5,-6.0,1,1,1,An Ros,IE,7.4,False
+53.5,-1.75,1,1,1,New Mill,GB,8.3,False

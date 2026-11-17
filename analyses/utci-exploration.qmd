@@ -1,5 +1,6 @@
+
 ---
-title: "utci exploration"
+title: "UTCI exploration"
 editor: source
 ---
 
@@ -14,12 +15,24 @@ knitr::opts_knit$set(
 library(tidyverse)
 
 triggerR <- new.env()
-walk(list.files("R", full.names = T), ~ source(.x, local = triggerR))
+walk(list.files("R", full.names = TRUE, pattern = "\\.R$"), ~ source(.x, local = triggerR))
 ```
 
 ```{r}
-utci_daily <- triggerR$read_utci_daily()
-utci_hourly <- triggerR$read_hourly()
+cities <- tribble(
+  ~city, ~grid_latitude, ~grid_longitude,
+  "Augsburg", 48.50, 10.75,
+  "Bologna", 44.50, 11.25,
+  "Geneva", 46.25, 6.00,
+  "Heraklion", 35.25, 25.00
+)
+
+utci_daily <- triggerR$read_utci_daily() |>
+  inner_join(cities, by = c("grid_latitude", "grid_longitude"))
+
+utci_hourly <- triggerR$read_utci_hourly() |>
+  inner_join(cities, by = c("grid_latitude", "grid_longitude"))
+
 trigger_hourly <- triggerR$read_hourly()
 ```
 
@@ -32,7 +45,7 @@ stress_bands <- tibble(
              "No thermal stress", "Moderate heat", "Strong heat", "Very strong heat", "Extreme heat"),
   ymin = c(-Inf, -40, -27, -13, 0, 9, 26, 32, 38, 46),
   ymax = c(-40, -27, -13, 0, 9, 26, 32, 38, 46, Inf)
-) %>%
+) |>
   mutate(xmin = min(utci_daily$date), xmax = max(utci_daily$date))
 
 stress_colors <- c(
@@ -45,7 +58,7 @@ stress_colors <- c(
 
 ggplot(utci_daily, aes(x = date)) +
   geom_rect(data = stress_bands, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = stress),
-          inherit.aes = FALSE, alpha = 0.25) +
+            inherit.aes = FALSE, alpha = 0.25) +
   geom_ribbon(aes(ymin = utci_min, ymax = utci_max), fill = "#A6CEE3", alpha = 0.4) +
   geom_line(aes(y = utci_mean), color = "#1F78B4", linewidth = 0.5) +
   facet_wrap(~ city, ncol = 2) +
@@ -62,19 +75,23 @@ ggplot(utci_daily, aes(x = date)) +
         panel.grid.minor = element_blank())
 ```
 
+
 ```{r}
 #| label: fig-utci-stress-distribution
 #| fig-width: 12
 #| fig-height: 8
 
-utci_stress <- triggerR$read_utci_hourly() %>%
-  mutate(stress = cut(utci, breaks = c(-Inf, -40, -27, -13, 0, 9, 26, 32, 38, 46, Inf),
-                      labels = stress_bands$stress, right = FALSE))
+utci_stress <- utci_hourly |>
+  mutate(
+    stress = cut(utci, breaks = c(-Inf, -40, -27, -13, 0, 9, 26, 32, 38, 46, Inf),
+                 labels = stress_bands$stress, right = FALSE)
+  )
 
-stress_counts <- utci_stress %>%
-  count(city, stress, .drop = FALSE) %>%
-  group_by(city) %>%
-  mutate(percentage = 100 * n / sum(n)) %>%
+stress_counts <- utci_stress |>
+  filter(!is.na(stress)) |>
+  count(city, stress, .drop = FALSE) |>
+  group_by(city) |>
+  mutate(percentage = 100 * n / sum(n)) |>
   ungroup()
 
 ggplot(stress_counts, aes(x = stress, y = n, fill = stress)) +
@@ -87,7 +104,3 @@ ggplot(stress_counts, aes(x = stress, y = n, fill = stress)) +
   theme_bw() +
   theme(panel.grid.major.y = element_blank())
 ```
-
-
-
-

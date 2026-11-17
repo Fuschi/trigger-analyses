@@ -59,3 +59,7 @@ analyses/*_files/
 # Quarto sources.
 
 /.quarto/
+
+# Copernicus UTCI downloads
+/data/shared/utci/UTCI-*.csv
+/data/shared/utci/.cache/

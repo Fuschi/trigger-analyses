@@ -1,4 +1,3 @@
-
 # ---------------------------------------------------------------------------
 # GPS data reading and Copernicus grid assignment
 # ---------------------------------------------------------------------------
@@ -40,6 +39,45 @@
 #
 # Exploratory analysis: analyses/gps-exploration.qmd
 # ---------------------------------------------------------------------------
+
+# Add the nearest city associated with each Copernicus grid point.
+# Add nearest city and TRIGGER study city to GPS grid points.
+.add_gps_city <- function(gps, radius_km = 30) {
+  cities <- readr::read_csv("data/shared/utci/grid_points.csv",
+                            col_select = c(grid_latitude, grid_longitude, city, country, city_distance_km),
+                            show_col_types = FALSE)
+  
+  sites <- tibble::tribble(
+    ~study_city, ~latitude, ~longitude,
+    "Augsburg", 48.50, 10.75,
+    "Bologna", 44.50, 11.25,
+    "Geneva", 46.25, 6.00,
+    "Heraklion", 35.25, 25.00
+  )
+  
+  gps <- gps |>
+    dplyr::left_join(cities, by = c("grid_latitude", "grid_longitude"))
+  
+  distances <- purrr::map(sites$study_city, \(city) {
+    site <- sites[sites$study_city == city, ]
+    lat1 <- gps$grid_latitude * pi / 180
+    lat2 <- site$latitude * pi / 180
+    dlat <- (gps$grid_latitude - site$latitude) * pi / 180
+    dlon <- (gps$grid_longitude - site$longitude) * pi / 180
+    a <- sin(dlat / 2)^2 + cos(lat1) * cos(lat2) * sin(dlon / 2)^2
+    6371 * 2 * asin(sqrt(pmin(1, a)))
+  })
+  
+  d <- do.call(cbind, distances)
+  nearest <- max.col(-replace(d, is.na(d), Inf), ties.method = "first")
+  distance <- d[cbind(seq_len(nrow(gps)), nearest)]
+  
+  gps |>
+    dplyr::mutate(
+      study_city = dplyr::if_else(distance <= radius_km, sites$study_city[nearest], NA_character_)
+    ) |>
+    dplyr::relocate(city, country, city_distance_km, study_city, .after = grid_longitude)
+}
 
 
 # Read GPS observations and assign grid coordinates.
@@ -104,7 +142,8 @@ read_gps_tidy <- function(accuracy_min = 1, accuracy_max = 200) {
       grid_longitude = dplyr::if_else(assigned, ref_lon, NA_real_)) |>
     dplyr::select(userId, dplyr::all_of(period), grid_latitude, grid_longitude,
                   gps_n, grid_gps_n, hours_n, cells_n,
-                  first_ts, last_ts, max_offset, assigned)
+                  first_ts, last_ts, max_offset, assigned) |>
+    .add_gps_city()
 }
 
 
