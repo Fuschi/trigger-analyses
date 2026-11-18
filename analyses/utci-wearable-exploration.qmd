@@ -22,7 +22,7 @@ library(tidyverse)
 triggerR <- new.env()
 walk(list.files("R", full.names = TRUE, pattern = "\\.R$"), ~ source(.x, local = triggerR))
 
-gps_utci <- triggerR$read_gps_utci(resolution = "hourly", neighbours = 1) |>
+gps_utci_hourly <- triggerR$read_gps_utci_hourly(resolution = "hourly", neighbours = 1) |>
   mutate(date = as.Date(hour_ts, tz = "UTC"),
          month = as.Date(lubridate::floor_date(hour_ts, "month")))
 
@@ -35,7 +35,7 @@ stress_colors <- c(
   "Moderate heat" = "#FDBA74", "Strong heat" = "#FB923C",
   "Very strong heat" = "#EA580C", "Extreme heat" = "#B91C1C")
 
-gps_utci <- gps_utci |>
+gps_utci_hourly <- gps_utci_hourly |>
   mutate(stress = cut(utci, breaks = c(-Inf, -40, -27, -13, 0, 9, 26, 32, 38, 46, Inf),
                       labels = stress_levels, right = FALSE))
 ```
@@ -45,39 +45,17 @@ gps_utci <- gps_utci |>
 Counts below refer to **participant-hours with a GPS observation**, not all hours in the study period. A GPS hour is assigned only when its grid cells satisfy the spatial rule; UTCI coverage additionally requires a non-missing UTCI value for the assigned grid point and hour.
 
 ```{r}
-coverage <- gps_utci |>
-  summarise(participants = n_distinct(userId), gps_hours = n(),
-            assigned_hours = sum(assigned, na.rm = TRUE),
-            matched_hours = sum(utci_available, na.rm = TRUE),
-            assigned_pct = 100 * assigned_hours / gps_hours,
-            matched_pct = 100 * matched_hours / gps_hours,
-            matched_given_assigned_pct = if_else(assigned_hours > 0, 100 * matched_hours / assigned_hours, NA_real_))
-knitr::kable(coverage, digits = 1)
-```
+coverage <- gps_utci_hourly |>
+  summarise(
+    participants = n_distinct(userId),
+    gps_hours = n(),
+    gps_assigned_hours = sum(gps_assigned, na.rm = TRUE),
+    gps_utci_hours = sum(gps_utci_available, na.rm = TRUE),
+    gps_assigned_pct = 100 * gps_assigned_hours / gps_hours,
+    gps_utci_pct = 100 * gps_utci_hours / gps_hours,
+    gps_utci_assigned_pct = 100 * gps_utci_hours / gps_assigned_hours)
 
-```{r}
-#| label: fig-coverage
-#| fig-width: 10
-#| fig-height: 4
-
-gps_utci |>
-  mutate(status = case_when(!assigned ~ "GPS not assigned",
-                            utci_available ~ "GPS + UTCI",
-                            TRUE ~ "Assigned GPS, UTCI missing")) |>
-  count(status) |>
-  mutate(status = factor(status, levels = c("GPS + UTCI", "Assigned GPS, UTCI missing", "GPS not assigned"))) |>
-  ggplot(aes(status, n, fill = status)) +
-  geom_col(width = 0.7) +
-  scale_y_continuous(labels = scales::label_comma()) +
-  scale_fill_manual(values = c("GPS + UTCI" = "#2C7FB8", "Assigned GPS, UTCI missing" = "#FCAE91",
-                               "GPS not assigned" = "#BDBDBD"), guide = "none") +
-  labs(x = NULL, y = "Participant-hours", title = "Availability of GPS-derived UTCI exposure") +
-  theme_bw() + theme(panel.grid.major.x = element_blank())
-```
-
-```{r}
-participant_coverage <- triggerR$summarise_gps_utci(gps_utci)
-knitr::kable(participant_coverage, digits = 1)
+print(coverage, width = Inf)
 ```
 
 ## Observed thermal stress
@@ -89,27 +67,18 @@ These results describe **hours with both valid GPS grid assignment and UTCI**. T
 #| fig-width: 11
 #| fig-height: 6
 
-gps_utci |>
-  filter(utci_available, !is.na(stress)) |>
+gps_utci_hourly |>
+  filter(gps_utci_available, !is.na(stress)) |>
   count(stress, .drop = FALSE) |>
   ggplot(aes(stress, n, fill = stress)) +
-  geom_col(width = 0.8) + coord_flip() +
+  geom_col(width = 0.8) +
+  coord_flip() +
   scale_fill_manual(values = stress_colors, guide = "none") +
   scale_y_continuous(labels = scales::label_comma()) +
-  labs(x = NULL, y = "Observed participant-hours", title = "Thermal stress at observed GPS locations") +
-  theme_bw() + theme(panel.grid.major.y = element_blank())
-```
-
-```{r}
-heat_summary <- gps_utci |>
-  filter(utci_available) |>
-  summarise(observed_hours = n(),
-            moderate_heat_hours = sum(utci >= 26),
-            strong_heat_hours = sum(utci >= 32),
-            very_strong_heat_hours = sum(utci >= 38),
-            extreme_heat_hours = sum(utci >= 46),
-            max_utci = max(utci))
-knitr::kable(heat_summary, digits = 1)
+  labs(x = NULL, y = "Observed participant-hours",
+       title = "Thermal stress at observed GPS locations") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank())
 ```
 
 ## Hot days observed by GPS
@@ -117,25 +86,7 @@ knitr::kable(heat_summary, digits = 1)
 A **hot observed day** is a participant-day with at least one matched GPS hour reaching 32 °C UTCI (strong heat stress). A day is not classified as cool merely because no hot hour was observed: GPS sampling may be sparse.
 
 ```{r}
-daily_exposure <- gps_utci |>
-  group_by(userId, date) |>
-  summarise(gps_hours = n(), assigned_hours = sum(assigned, na.rm = TRUE),
-            utci_hours = sum(utci_available, na.rm = TRUE),
-            utci_mean = if (all(is.na(utci))) NA_real_ else mean(utci, na.rm = TRUE),
-            utci_max = if (all(is.na(utci))) NA_real_ else max(utci, na.rm = TRUE),
-            strong_heat_hours = sum(utci >= 32, na.rm = TRUE),
-            very_strong_heat_hours = sum(utci >= 38, na.rm = TRUE),
-            extreme_heat_hours = sum(utci >= 46, na.rm = TRUE),
-            .groups = "drop") |>
-  mutate(hot_day = utci_hours > 0 & strong_heat_hours > 0)
-
-hot_day_summary <- daily_exposure |>
-  summarise(participant_days_with_gps = n(),
-            participant_days_with_utci = sum(utci_hours > 0),
-            hot_observed_participant_days = sum(hot_day),
-            very_strong_heat_participant_days = sum(very_strong_heat_hours > 0),
-            extreme_heat_participant_days = sum(extreme_heat_hours > 0))
-knitr::kable(hot_day_summary)
+gps_utci_daily <- triggerR$read_gps_utci("daily")
 ```
 
 ```{r}
@@ -143,87 +94,40 @@ knitr::kable(hot_day_summary)
 #| fig-width: 12
 #| fig-height: 5
 
-daily_exposure |>
-  filter(utci_hours > 0) |>
+gps_utci_daily |>
+  filter(gps_utci_available) |>
+  mutate(hot_day = utci_max >= 32) |>
   ggplot(aes(date, utci_max)) +
   geom_point(aes(color = hot_day), alpha = 0.4, size = 1.2) +
   geom_hline(yintercept = c(32, 38, 46), linetype = "dashed", color = "grey50") +
   scale_color_manual(values = c("FALSE" = "#2C7FB8", "TRUE" = "#D95F0E"), guide = "none") +
-  labs(x = NULL, y = "Maximum UTCI in matched GPS hours (°C)",
-       title = "Hottest UTCI observed for each participant-day",
+  labs(x = NULL, y = "Daily maximum UTCI (°C)",
+       title = "Maximum daily UTCI by participant",
        subtitle = "Dashed thresholds: 32, 38 and 46 °C; each point is a participant-day") +
   theme_bw()
 ```
 
-```{r}
-#| label: fig-heat-monthly
-#| fig-width: 12
-#| fig-height: 5
-
-gps_utci |>
-  filter(utci_available) |>
-  mutate(heat = case_when(utci >= 46 ~ "Extreme heat (≥46 °C)",
-                          utci >= 38 ~ "Very strong heat (38–46 °C)",
-                          utci >= 32 ~ "Strong heat (32–38 °C)",
-                          TRUE ~ "Below strong heat")) |>
-  filter(heat != "Below strong heat") |>
-  count(month, heat) |>
-  ggplot(aes(month, n, fill = heat)) +
-  geom_col() +
-  scale_fill_manual(values = c("Strong heat (32–38 °C)" = "#FB923C",
-                               "Very strong heat (38–46 °C)" = "#EA580C",
-                               "Extreme heat (≥46 °C)" = "#B91C1C")) +
-  scale_x_date(date_breaks = "2 months", date_labels = "%b %Y") +
-  scale_y_continuous(labels = scales::label_comma()) +
-  labs(x = NULL, y = "Observed participant-hours", fill = NULL,
-       title = "Strong and extreme heat observations over time") +
-  theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
-```
-
-## Hottest observed participant-days
-
-`utci_hours` indicates how many hours support each daily maximum. Days with few matched hours must be interpreted cautiously.
-
-```{r}
-daily_exposure |>
-  filter(utci_hours > 0) |>
-  arrange(desc(utci_max), desc(utci_hours)) |>
-  select(userId, date, gps_hours, assigned_hours, utci_hours, utci_mean, utci_max,
-         strong_heat_hours, very_strong_heat_hours, extreme_heat_hours) |>
-  slice_head(n = 30) |>
-  knitr::kable(digits = 1)
-```
+## Sleep - UTCI & GPS Coverage
 
 ```{r}
 #| label: utci-sleep-coverage
 
 sleep <- triggerR$.read_trigger_csv("sleep_tidy") |>
-  select(userId, date, sleepduration) |>
-  mutate(userId = as.character(userId)) |>
-  distinct(userId, date)
+  select(userId, date, sleepduration)
 
-utci_sleep <- gps_utci |>
-  mutate(date = as.Date(hour_ts, tz = "UTC")) |>
-  group_by(userId, date) |>
-  summarise(
-    gps_hours = n(),
-    utci_hours = sum(!is.na(utci)),
-    utci_mean = if (all(is.na(utci))) NA_real_ else mean(utci, na.rm = TRUE),
-    utci_max = if (all(is.na(utci))) NA_real_ else max(utci, na.rm = TRUE),
-    .groups = "drop") |>
-  left_join(sleep |> mutate(has_sleep = TRUE), by = c("userId", "date")) |>
-  mutate(has_sleep = replace_na(has_sleep, FALSE))
+utci_sleep <- gps_utci_daily |>
+  filter(gps_utci_available) |>
+  mutate(date = as.Date(date) + 1) |>
+  inner_join(sleep, by = c("userId", "date")) 
+```
 
+```{r}
 utci_sleep |>
   summarise(
     participants = n_distinct(userId),
-    gps_days = n(),
-    utci_days = sum(utci_hours > 0),
-    sleep_days = sum(has_sleep),
-    utci_sleep_days = sum(has_sleep & utci_hours > 0),
-    hot_days = sum(has_sleep & utci_max >= 32, na.rm = TRUE),
-    very_hot_days = sum(has_sleep & utci_max >= 38, na.rm = TRUE)
-  )
+    days = n_distinct(userId, date),
+    first_date = min(date),
+    last_date = max(date))
 ```
 
 ```{r}
@@ -231,53 +135,98 @@ utci_sleep |>
 #| fig-width: 14
 #| fig-height: 10
 
-gps_days <- gps_utci |>
-  mutate(date = as.Date(hour_ts, tz = "UTC")) |>
-  distinct(userId, date) |>
-  mutate(gps = TRUE)
+#| label: fig-gps-sleep-calendar
+#| fig-width: 14
+#| fig-height: 10
 
-sleep_days <- sleep |>
-  distinct(userId, date) |>
-  mutate(sleep = TRUE)
+metadata <- triggerR$read_participant_metadata() |>
+  select(userId, nationality)
+
+gps_days <- gps_utci |> distinct(userId, date) |> mutate(gps = TRUE)
+sleep_days <- sleep |> distinct(userId, date) |> mutate(sleep = TRUE)
 
 calendar <- full_join(gps_days, sleep_days, by = c("userId", "date")) |>
+  left_join(metadata, by = "userId") |>
   mutate(
     gps = replace_na(gps, FALSE),
     sleep = replace_na(sleep, FALSE),
-    coverage = case_when(
-      gps & sleep ~ "GPS + Sleep",
-      gps ~ "GPS only",
-      sleep ~ "Sleep only"
-    )
+    coverage = case_when(gps & sleep ~ "GPS + Sleep", gps ~ "GPS only", sleep ~ "Sleep only")
   )
 
-ggplot(calendar, aes(x = date, y = fct_rev(factor(userId)), fill = coverage)) +
-  geom_tile(width = 0.9, height = 0.9) +
-  scale_fill_manual(values = c(
-    "GPS + Sleep" = "#238B45",
-    "GPS only" = "#3182BD",
-    "Sleep only" = "#FDAE6B"
-  )) +
-  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y", expand = c(0, 0)) +
-  labs(x = NULL, y = "Participant", fill = "Data availability",
-       title = "GPS and sleep data availability by participant and day") +
+order <- calendar |> distinct(userId, nationality) |> arrange(nationality, userId) |> pull(userId)
+calendar <- calendar |> mutate(userId = factor(userId, levels = rev(order)))
+nationality_tiles <- calendar |> distinct(userId, nationality) |> mutate(date = max(calendar$date) + 10)
+
+ggplot(calendar, aes(date, userId)) +
+  geom_tile(aes(fill = coverage), width = 0.9, height = 0.9) +
+  scale_fill_manual(values = c("GPS + Sleep" = "#238B45", "GPS only" = "#3182BD", "Sleep only" = "#FDAE6B")) +
+  ggnewscale::new_scale_fill() +
+  geom_tile(data = nationality_tiles, aes(fill = nationality), width = 5, height = 1) +
+  scale_fill_brewer(palette = "Set2", na.value = "grey80", name = "Nationality") +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y", expand = expansion(mult = c(0, 0.01))) +
+  labs(x = NULL, y = "Participant", title = "GPS and sleep availability by participant and day") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        panel.grid = element_blank(),
-        legend.position = "bottom")
+        panel.grid = element_blank(), legend.position = "bottom")
+```
+
+```{r}
+#| label: fig-utci-sleep-stress
+#| fig-width: 10
+#| fig-height: 5
+
+utci_sleep |>
+  mutate(stress = cut(utci_max,
+    breaks = c(-Inf, -40, -27, -13, 0, 9, 26, 32, 38, 46, Inf),
+    labels = stress_levels, right = FALSE)) |>
+  distinct(userId, date, stress) |>
+  count(stress, .drop = FALSE) |>
+  ggplot(aes(stress, n, fill = stress)) +
+  geom_col(width = 0.8) +
+  coord_flip() +
+  scale_fill_manual(values = stress_colors, guide = "none") +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(x = NULL, y = "Participant-days with GPS, UTCI and sleep",
+       title = "Thermal stress distribution on days with sleep data") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank())
+```
+
+```{r}
+quantile(utci_sleep$sleepduration, seq(0,1,.1))
+```
+
+```{r, fig.width=9, fig.height=4}
+utci_sleep |>
+  #filter(between(sleepduration, 0, 720)) |>
+  mutate(bin = cut_width(sleepduration, width = 60, boundary = 0, closed = "left")) |>
+  group_by(bin) |>
+  summarise(n = n(), utci_max = mean(utci_max, na.rm = TRUE), .groups = "drop") |>
+  ggplot(aes(bin, n, fill = utci_max)) +
+  geom_col() +
+  scale_fill_gradientn(
+    colours = c("#313695", "#4575B4", "#74ADD1", "#ABD9E9",
+                "#E0F3F8", "#FFFFBF", "#FEE090", "#FDAE61",
+                "#F46D43", "#D73027", "#A50026"),
+    name = "Mean daily max UTCI (°C)") +
+  labs(x = "Sleep duration (60-minute bins)", y = "Observations") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+```{r}
+utci_sleep |>
+  ggplot(aes(x = utci_max, y = sleepduration)) +
+  geom_point()
 ```
 
 
-
-
-
-
-
-
-
-
-
-
+```{r}
+utci_sleep |>
+  #filter(sleepduration <= 720) |>
+  summarise(pearson = cor(sleepduration, utci_max),
+            spearman = cor(sleepduration, utci_max, method = "spearman"))
+```
 
 
 
