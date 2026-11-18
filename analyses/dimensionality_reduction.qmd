@@ -273,31 +273,6 @@ plots <- map(phy_vars_filt, \(variable)
 patchwork::wrap_plots(plots, ncol = 3)
 ```
 
-```{r, fig.width=9, fig.height=9}
-selected_users <- umap_scores |>
-  mutate(region = if_else(UMAP2 > -7, "Lower island", "Other")) %>%
-  filter(region == "Lower island") |>
-  count(userId, sort = TRUE) |>
-  slice_head(n = 20) |>
-  pull(userId)
-
-trigger_hourly_wide_tans |>
-  filter(userId %in% selected_users) |>
-  select(userId, hour_ts, bodytemp, skintemp) |>
-  pivot_longer(
-    c(bodytemp, skintemp),
-    names_to = "variable", values_to = "temperature") |>
-  filter(!is.na(temperature)) %>%
-  ggplot(aes(hour_ts, temperature, colour = variable)) +
-  geom_point(size = 0.4, alpha = 0.5) +
-  facet_wrap(~ userId, ncol = 3, scales = "free_x") +
-  scale_colour_manual(values = c(
-    bodytemp = "#0072B2", skintemp = "#D55E00"
-  )) +
-  labs(x = NULL, y = "Temperature (°C)", colour = NULL) +
-  theme_bw() +
-  theme(legend.position = "top", panel.grid.minor = element_blank())
-```
 
 ## Environmental PCA
 
