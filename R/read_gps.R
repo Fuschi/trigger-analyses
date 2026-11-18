@@ -83,7 +83,6 @@
 # Read GPS observations and assign grid coordinates.
 read_gps_tidy <- function(accuracy_min = 1, accuracy_max = 200) {
   stopifnot(length(accuracy_min) == 1, length(accuracy_max) == 1,
-            is.finite(accuracy_min), is.finite(accuracy_max),
             accuracy_min <= accuracy_max)
   
   readr::read_csv("data/tidy/gps_tidy.csv.gz",
